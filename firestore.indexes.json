@@ -1,0 +1,113 @@
+{
+    "indexes": [
+        {
+            "collectionGroup": "claims",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "memberId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "filedAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "claims",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "memberId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "updatedAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "claims",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "memberId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "type",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "filedAt",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "claims",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "aiVerdict",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "filedAt",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "blockchain_events",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "claimId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "blockNumber",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "mpesa_transactions",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "conversationId",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "mpesa_transactions",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "initiatedAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "conversations",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "memberId",
+                    "order": "ASCENDING"
+                }
+            ]
+        }
+    ],
+    "fieldOverrides": []
+}

@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KlaimSwift — Admin Dashboard</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box
+        }
+
+        :root {
+            --bg: #111B21;
+            --surface: #202C33;
+            --surface2: #2A3942;
+            --accent: #25D366;
+            --accent-dim: #1A9B4B;
+            --text: #E9EDEF;
+            --text2: #8696A0;
+            --danger: #EF4444;
+            --warning: #F59E0B;
+            --border: #3B4A54;
+            --radius: 12px
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            display: flex;
+            min-height: 100vh
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            z-index: 100
+        }
+
+        .sidebar-header {
+            padding: 24px 20px;
+            border-bottom: 1px solid var(--border)
+        }
+
+        .sidebar-header h1 {
+            font-family: 'Syne', sans-serif;
+            font-size: 22px;
+            color: var(--accent)
+        }
+
+        .sidebar-header p {
+            font-size: 12px;
+            color: var(--text2);
+            margin-top: 2px
+        }
+
+        .nav {
+            flex: 1;
+            padding: 12px 0;
+            overflow-y: auto
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 20px;
+            color: var(--text2);
+            cursor: pointer;
+            font-size: 14px;
+            transition: .15s;
+            border-left: 3px solid transparent
+        }
+
+        .nav-item:hover {
+            background: var(--surface2);
+            color: var(--text)
+        }
+
+        .nav-item.active {
+            background: rgba(37, 211, 102, .08);
+            color: var(--accent);
+            border-left-color: var(--accent)
+        }
+
+        .nav-item .material-icons-round {
+            font-size: 20px
+        }
+
+        .sidebar-footer {
+            padding: 16px 20px;
+            border-top: 1px solid var(--border);
+            font-size: 12px;
+            color: var(--text2)
+        }
+
+        .btn-logout {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text2);
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            width: 100%;
+            margin-top: 8px;
+            transition: .15s
+        }
+
+        .btn-logout:hover {
+            border-color: var(--danger);
+            color: var(--danger)
+        }
+
+        /* Main */
+        .main {
+            margin-left: 260px;
+            flex: 1;
+            padding: 24px 32px;
+            min-height: 100vh
+        }
+
+        .page {
+            display: none
+        }
+
+        .page.active {
+            display: block
+        }
+
+        .page-header {
+            margin-bottom: 24px
+        }
+
+        .page-header h2 {
+            font-family: 'Syne', sans-serif;
+            font-size: 24px;
+            font-weight: 700
+        }
+
+        .page-header p {
+            color: var(--text2);
+            font-size: 14px;
+            margin-top: 4px
+        }
+
+        /* Cards */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px
+        }
+
+        .kpi-card {
+            background: var(--surface);
+            border-radius: var(--radius);
+            padding: 20px;
+            border: 1px solid var(--border)
+        }
+
+        .kpi-card .label {
+            font-size: 12px;
+            color: var(--text2);
+            text-transform: uppercase;
+            letter-spacing: .5px
+        }
+
+        .kpi-card .value {
+            font-family: 'Syne', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            margin-top: 4px;
+            color: var(--accent)
+        }
+
+        .kpi-card .value.danger {
+            color: var(--danger)
+        }
+
+        .kpi-card .value.warning {
+            color: var(--warning)
+        }
+
+        /* Tables */
+        .table-card {
+            background: var(--surface);
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            overflow: hidden;
+            margin-bottom: 24px
+        }
+
+        .table-card .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border)
+        }
+
+        .table-card .card-header h3 {
+            font-family: 'Syne', sans-serif;
+            font-size: 16px
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse
+        }
+
+        th {
+            text-align: left;
+            padding: 12px 16px;
+            font-size: 12px;
+            color: var(--text2);
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            border-bottom: 1px solid var(--border)
+        }
+
+        td {
+            padding: 12px 16px;
+            font-size: 13px;
+            border-bottom: 1px solid rgba(59, 74, 84, .3)
+        }
+
+        tr:hover {
+            background: rgba(37, 211, 102, .03)
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600
+        }
+
+        .badge.green {
+            background: rgba(37, 211, 102, .15);
+            color: #25D366
+        }
+
+        .badge.red {
+            background: rgba(239, 68, 68, .15);
+            color: #EF4444
+        }
+
+        .badge.yellow {
+            background: rgba(245, 158, 11, .15);
+            color: #F59E0B
+        }
+
+        .badge.blue {
+            background: rgba(59, 130, 246, .15);
+            color: #3B82F6
+        }
+
+        .badge.gray {
+            background: rgba(134, 150, 160, .15);
+            color: #8696A0
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: 'DM Sans', sans-serif;
+            transition: .15s
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: #111B21
+        }
+
+        .btn-primary:hover {
+            background: #1EBE5A
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: #fff
+        }
+
+        .btn-danger:hover {
+            background: #DC2626
+        }
+
+        .btn-outline {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text2)
+        }
+
+        .btn-outline:hover {
+            border-color: var(--accent);
+            color: var(--accent)
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px
+        }
+
+        /* Search */
+        .search-box {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px
+        }
+
+        .search-input {
+            flex: 1;
+            padding: 10px 16px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 14px;
+            font-family: 'DM Sans', sans-serif;
+            outline: none
+        }
+
+        .search-input:focus {
+            border-color: var(--accent)
+        }
+
+        /* Charts */
+        .chart-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px
+        }
+
+        .chart-card {
+            background: var(--surface);
+            border-radius: var(--radius);
+            padding: 20px;
+            border: 1px solid var(--border)
+        }
+
+        .chart-card h3 {
+            font-family: 'Syne', sans-serif;
+            font-size: 14px;
+            margin-bottom: 16px
+        }
+
+        .chart-card canvas {
+            max-height: 250px
+        }
+
+        /* Feed */
+        .feed {
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 0 20px 20px
+        }
+
+        .feed-item {
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(59, 74, 84, .3);
+            font-size: 13px
+        }
+
+        .feed-item .time {
+            color: var(--text2);
+            font-size: 11px
+        }
+
+        /* Drawer */
+        .drawer {
+            position: fixed;
+            right: -500px;
+            top: 0;
+            bottom: 0;
+            width: 480px;
+            background: var(--surface);
+            border-left: 1px solid var(--border);
+            z-index: 200;
+            transition: .3s;
+            overflow-y: auto;
+            padding: 24px
+        }
+
+        .drawer.open {
+            right: 0
+        }
+
+        .drawer-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, .5);
+            z-index: 199;
+            display: none
+        }
+
+        .drawer-overlay.open {
+            display: block
+        }
+
+        .drawer h3 {
+            font-family: 'Syne', sans-serif;
+            margin-bottom: 16px
+        }
+
+        .drawer .close-btn {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: none;
+            border: none;
+            color: var(--text2);
+            font-size: 24px;
+            cursor: pointer
+        }
+
+        /* Timeline */
+        .timeline {
+            border-left: 2px solid var(--border);
+            padding-left: 20px;
+            margin: 16px 0
+        }
+
+        .timeline-item {
+            position: relative;
+            padding-bottom: 16px
+        }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -25px;
+            top: 2px;
+            width: 10px;
+            height: 10px;
+            background: var(--accent);
+            border-radius: 50%
+        }
+
+        .timeline-item .event {
+            font-weight: 600;
+            font-size: 13px
+        }
+
+        .timeline-item .meta {
+            font-size: 11px;
+            color: var(--text2)
+        }
+
+        /* WhatsApp Inbox */
+        .inbox-layout {
+            display: grid;
+            grid-template-columns: 300px 1fr 300px;
+            height: calc(100vh - 120px);
+            gap: 1px;
+            background: var(--border);
+            border-radius: var(--radius);
+            overflow: hidden
+        }
+
+        .inbox-panel {
+            background: var(--surface);
+            overflow-y: auto
+        }
+
+        .conv-item {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: .15s
+        }
+
+        .conv-item:hover,
+        .conv-item.active {
+            background: var(--surface2)
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <h1>⚡ KlaimSwift</h1>
+            <p>Admin Panel</p>
+        </div>
+        <div class="nav">
+            <div class="nav-item active" data-page="dashboard"><span
+                    class="material-icons-round">dashboard</span><span>Dashboard</span></div>
+            <div class="nav-item" data-page="claims"><span class="material-icons-round">description</span><span>Claims
+                    Inbox</span></div>
+            <div class="nav-item" data-page="whatsapp"><span class="material-icons-round">chat</span><span>WhatsApp
+                    Inbox</span></div>
+            <div class="nav-item" data-page="verification"><span class="material-icons-round">verified</span><span>AI
+                    Verification</span></div>
+            <div class="nav-item" data-page="fraud"><span class="material-icons-round">warning</span><span>Fraud
+                    Alerts</span></div>
+            <div class="nav-item" data-page="adjuster"><span
+                    class="material-icons-round">rate_review</span><span>Adjuster Queue</span></div>
+            <div class="nav-item" data-page="analytics"><span
+                    class="material-icons-round">insights</span><span>Analytics</span></div>
+            <div class="nav-item" data-page="payouts"><span class="material-icons-round">payments</span><span>M-Pesa
+                    Payouts</span></div>
+        </div>
+        <div class="sidebar-footer">
+            <span id="adminEmail">admin@klaimswift.co.ke</span>
+            <button class="btn-logout" onclick="alert('Session ended.')">Sign Out</button>
+        </div>
+    </nav>
+
+    <!-- Drawer Overlay -->
+    <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+    <div class="drawer" id="claimDrawer">
+        <button class="close-btn" onclick="closeDrawer()">&times;</button>
+        <div id="drawerContent"></div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main" style="padding-top: 0">
+
+        <div style="padding-top: 24px">
+            <!-- PAGE 1: Dashboard -->
+            <div class="page active" id="page-dashboard">
+                <div class="page-header">
+                    <h2>Dashboard</h2>
+                    <p>Real-time overview</p>
+                </div>
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="label">Claims Today</div>
+                        <div class="value" id="kpi-today">14</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="label">Pending Review</div>
+                        <div class="value warning" id="kpi-pending">3</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="label">Fraud Flagged</div>
+                        <div class="value danger" id="kpi-fraud">1</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="label">Avg Settlement (hrs)</div>
+                        <div class="value" id="kpi-settlement">2.4</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="label">M-Pesa Today (KES)</div>
+                        <div class="value" id="kpi-mpesa">450,000</div>
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                    <div class="table-card">
+                        <div class="card-header">
+                            <h3>Recent Claims</h3>
+                        </div>
+                        <div class="feed" id="recentClaimsFeed"></div>
+                    </div>
+                    <div class="table-card">
+                        <div class="card-header">
+                            <h3>Activity Feed</h3>
+                        </div>
+                        <div class="feed" id="activityFeed">
+                            <div class="feed-item">
+                                <div class="time">Just now</div>M-Pesa Payout success for CLM-2025-KE-129033
+                            </div>
+                            <div class="feed-item">
+                                <div class="time">10 mins ago</div>AI flagged CLM-2025-KE-944201 for Name Mismatch
+                            </div>
+                            <div class="feed-item">
+                                <div class="time">1 hour ago</div>New claim CLM-2025-KE-849921 filed via WhatsApp
+                            </div>
+                            <div class="feed-item">
+                                <div class="time">2 hours ago</div>Admin approved CLM-2025-KE-388291
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAGE 2: Analytics -->
+            <div class="page" id="page-analytics">
+                <div class="page-header">
+                    <h2>Analytics</h2>
+                    <p>Claims and performance metrics</p>
+                </div>
+                <div class="chart-grid">
+                    <div class="chart-card">
+                        <h3>Claims Volume (30 days)</h3><canvas id="chartVolume"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Channel Split</h3><canvas id="chartChannel"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Claim Type Distribution</h3><canvas id="chartType"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>AI Score Distribution</h3><canvas id="chartAIScore"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Settlement Time (days)</h3><canvas id="chartSettlement"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Fraud Rate (%)</h3><canvas id="chartFraud"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Other pages are similarly stubbed to show UI without data dependencies -->
+            <div class="page" id="page-claims">
+                <div class="page-header">
+                    <h2>Claims Inbox</h2>
+                </div>
+                <div class="table-card">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Claim ID</th>
+                                <th>Type</th>
+                                <th>Amount (KES)</th>
+                                <th>Status</th>
+                                <th>AI Score</th>
+                                <th>Filed</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="claimsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="page" id="page-verification">
+                <div class="page-header">
+                    <h2>AI Verification</h2>
+                </div>
+                <div class="table-card">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Claim ID</th>
+                                <th>Type</th>
+                                <th>Documents</th>
+                                <th>AI Score</th>
+                                <th>Verdict</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="verificationTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="page" id="page-fraud">
+                <div class="page-header">
+                    <h2>Fraud Alerts</h2>
+                </div>
+                <div class="table-card">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Claim ID</th>
+                                <th>Type</th>
+                                <th>Amount</th>
+                                <th>AI Score</th>
+                                <th>Flags</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fraudTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="page" id="page-payouts">
+                <div class="page-header">
+                    <h2>M-Pesa Payouts</h2>
+                </div>
+                <div class="table-card">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Claim ID</th>
+                                <th>Amount</th>
+                                <th>Phone</th>
+                                <th>Status</th>
+                                <th>TX ID</th>
+                                <th>Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="payoutsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="page" id="page-adjuster">
+                <div class="page-header">
+                    <h2>Adjuster Queue</h2>
+                </div>
+                <div class="table-card">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Claim ID</th>
+                                <th>Type</th>
+                                <th>Amount</th>
+                                <th>AI Score</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adjusterTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // ── Navigation ──
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', () => {
+                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+                item.classList.add('active');
+                document.getElementById('page-' + item.dataset.page)?.classList.add('active');
+                if (item.dataset.page === 'analytics') setTimeout(initCharts, 100);
+            });
+        });
+
+        // ── Mock Data ──
+        const allClaims = [
+            { claimId: 'CLM-2025-KE-194821', type: 'Motor Vehicle', amountKES: 150000, status: 'approved', aiScore: 92, aiVerdict: 'safe', filedAt: '2025-01-14T10:30:00Z', channel: 'WhatsApp' },
+            { claimId: 'CLM-2025-KE-829104', type: 'Medical', amountKES: 25000, status: 'paid', aiScore: 88, aiVerdict: 'safe', filedAt: '2025-01-13T09:15:00Z', channel: 'WhatsApp' },
+            { claimId: 'CLM-2025-KE-485912', type: 'Motor Vehicle', amountKES: 450000, status: 'adjuster_review', aiScore: 65, aiVerdict: 'review', filedAt: '2025-01-14T11:45:00Z', channel: 'WhatsApp' },
+            { claimId: 'CLM-2025-KE-772910', type: 'Property', amountKES: 1200000, status: 'pending', aiScore: 35, aiVerdict: 'flag', filedAt: '2025-01-14T14:20:00Z', channel: 'WhatsApp', flags: 2 },
+            { claimId: 'CLM-2025-KE-103948', type: 'Medical', amountKES: 15000, status: 'ai_review', aiScore: null, aiVerdict: null, filedAt: '2025-01-14T15:05:00Z', channel: 'WhatsApp' }
+        ];
+
+        const payouts = [
+            { claimId: 'CLM-2025-KE-829104', amount: 25000, phone: '+254712345678', status: 'completed', transactionId: 'SFA8194KXJ', initiatedAt: '2025-01-14T09:20:00Z' },
+            { claimId: 'CLM-2025-KE-194821', amount: 150000, phone: '+254789012345', status: 'pending', transactionId: null, initiatedAt: '2025-01-14T10:35:00Z' }
+        ];
+
+        function statusBadge(s) { return { pending: 'yellow', ai_review: 'blue', adjuster_review: 'yellow', approved: 'green', paid: 'green', rejected: 'red', payout_initiated: 'blue', completed: 'green' }[s] || 'gray' }
+
+        // ── Generate Tables ──
+        document.getElementById('recentClaimsFeed').innerHTML = allClaims.map(c =>
+            `<div class="feed-item" style="cursor:pointer" onclick="openClaimDrawer('${c.claimId}')"><strong>${c.claimId}</strong> — ${c.type} — KES ${c.amountKES.toLocaleString()} <span class="badge ${statusBadge(c.status)}">${c.status}</span><div class="time">${new Date(c.filedAt).toLocaleDateString()}</div></div>`
+        ).join('');
+
+        document.getElementById('claimsTableBody').innerHTML = allClaims.map(c =>
+            `<tr><td><a href="#" onclick="openClaimDrawer('${c.claimId}')" style="color:var(--accent)">${c.claimId}</a></td><td>${c.type}</td><td>KES ${c.amountKES.toLocaleString()}</td><td><span class="badge ${statusBadge(c.status)}">${c.status}</span></td><td>${c.aiScore || '-'}</td><td>${new Date(c.filedAt).toLocaleDateString()}</td><td><button class="btn btn-primary btn-sm">Approve</button> <button class="btn btn-outline btn-sm">Reject</button></td></tr>`
+        ).join('');
+
+        document.getElementById('verificationTableBody').innerHTML = allClaims.filter(c => c.aiScore != null).map(c =>
+            `<tr><td>${c.claimId}</td><td>${c.type}</td><td>2</td><td>${c.aiScore}</td><td><span class="badge ${c.aiVerdict === 'safe' ? 'green' : c.aiVerdict === 'review' ? 'yellow' : 'red'}">${c.aiVerdict}</span></td><td><span class="badge ${statusBadge(c.status)}">${c.status}</span></td></tr>`
+        ).join('');
+
+        document.getElementById('fraudTableBody').innerHTML = allClaims.filter(c => c.aiVerdict === 'flag').map(c =>
+            `<tr><td>${c.claimId}</td><td>${c.type}</td><td>KES ${c.amountKES.toLocaleString()}</td><td class="value danger">${c.aiScore}</td><td>${c.flags || 1} flags</td><td><button class="btn btn-danger btn-sm">Confirm Fraud</button> <button class="btn btn-outline btn-sm">Dismiss</button></td></tr>`
+        ).join('');
+
+        document.getElementById('adjusterTableBody').innerHTML = allClaims.filter(c => c.status === 'adjuster_review').map(c =>
+            `<tr><td>${c.claimId}</td><td>${c.type}</td><td>KES ${c.amountKES.toLocaleString()}</td><td>${c.aiScore}</td><td><span class="badge ${statusBadge(c.status)}">${c.status}</span></td><td><button class="btn btn-primary btn-sm">Approve</button> <button class="btn btn-outline btn-sm">Reject</button></td></tr>`
+        ).join('');
+
+        document.getElementById('payoutsTableBody').innerHTML = payouts.map(t =>
+            `<tr><td>${t.claimId}</td><td>KES ${t.amount.toLocaleString()}</td><td>${t.phone}</td><td><span class="badge ${statusBadge(t.status)}">${t.status}</span></td><td>${t.transactionId || '-'}</td><td>${new Date(t.initiatedAt).toLocaleDateString()}</td></tr>`
+        ).join('');
+
+        // ── Charts ──
+        let chartsInitialized = false;
+        function initCharts() {
+            if (chartsInitialized) return;
+            chartsInitialized = true;
+            const ctx = (id) => document.getElementById(id).getContext('2d');
+            const chartOpts = { responsive: true, plugins: { legend: { labels: { color: '#8696A0' } } }, scales: { x: { ticks: { color: '#8696A0' }, grid: { color: 'rgba(59,74,84,.3)' } }, y: { ticks: { color: '#8696A0' }, grid: { color: 'rgba(59,74,84,.3)' } } } };
+
+            new Chart(ctx('chartVolume'), { type: 'line', data: { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], datasets: [{ label: 'Claims', data: [5, 8, 12, 6, 15, 4, 3], borderColor: '#25D366', backgroundColor: 'rgba(37,211,102,.1)', fill: true, tension: .4 }] }, options: chartOpts });
+            new Chart(ctx('chartChannel'), { type: 'doughnut', data: { labels: ['WhatsApp'], datasets: [{ data: [100], backgroundColor: ['#25D366'] }] }, options: { responsive: true, plugins: { legend: { labels: { color: '#8696A0' } } } } });
+            new Chart(ctx('chartType'), { type: 'bar', data: { labels: ['Motor', 'Medical', 'Property', 'Life'], datasets: [{ label: 'Claims', data: [45, 25, 10, 5], backgroundColor: ['#25D366', '#3B82F6', '#F59E0B', '#EF4444'] }] }, options: chartOpts });
+            new Chart(ctx('chartAIScore'), { type: 'doughnut', data: { labels: ['Safe (75-100)', 'Review (50-74)', 'Flag (0-49)'], datasets: [{ data: [70, 20, 10], backgroundColor: ['#25D366', '#F59E0B', '#EF4444'] }] }, options: { responsive: true, plugins: { legend: { labels: { color: '#8696A0' } } } } });
+            new Chart(ctx('chartSettlement'), { type: 'bar', data: { labels: ['< 24h', '1-3 days', '3-7 days', '> 7 days'], datasets: [{ label: 'Claims', data: [50, 30, 15, 5], backgroundColor: ['#25D366', '#3B82F6', '#F59E0B', '#EF4444'] }] }, options: chartOpts });
+            new Chart(ctx('chartFraud'), { type: 'line', data: { labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May'], datasets: [{ label: 'Fraud %', data: [4.2, 5.1, 4.8, 3.5, 4.0], borderColor: '#EF4444', backgroundColor: 'rgba(239,68,68,.1)', fill: true, tension: .4 }] }, options: chartOpts });
+        }
+
+        // ── Drawer ──
+        function openClaimDrawer(claimId) {
+            const claim = allClaims.find(c => c.claimId === claimId);
+            document.getElementById('drawerContent').innerHTML = `
+        <h3>${claim.claimId}</h3>
+        <p style="margin-bottom:16px"><span class="badge ${statusBadge(claim.status)}">${claim.status}</span></p>
+        <table style="width:100%;margin-bottom:16px">
+          <tr><td style="color:var(--text2)">Type</td><td>${claim.type}</td></tr>
+          <tr><td style="color:var(--text2)">Amount</td><td>KES ${(claim.amountKES).toLocaleString()}</td></tr>
+          <tr><td style="color:var(--text2)">AI Score</td><td>${claim.aiScore ?? '—'}</td></tr>
+        </table>
+        <div style="margin-top:16px;display:flex;gap:8px">
+          <button class="btn btn-primary" onclick="closeDrawer()">Approve</button>
+          <button class="btn btn-danger" onclick="closeDrawer()">Reject</button>
+        </div>
+      `;
+            document.getElementById('claimDrawer').classList.add('open');
+            document.getElementById('drawerOverlay').classList.add('open');
+        }
+        function closeDrawer() {
+            document.getElementById('claimDrawer').classList.remove('open');
+            document.getElementById('drawerOverlay').classList.remove('open');
+        }
+    </script>
+</body>
+
+</html>
