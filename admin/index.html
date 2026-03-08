@@ -303,8 +303,10 @@
             <p>Admin Panel</p>
         </div>
         <div class="nav">
-            <div class="nav-item active" data-page="claims"><span
-                    class="material-icons-round">description</span><span>Claims Inbox</span></div>
+            <div class="nav-item active" data-page="dashboard"><span
+                    class="material-icons-round">dashboard</span><span>Dashboard</span></div>
+            <div class="nav-item" data-page="claims"><span class="material-icons-round">description</span><span>Claims
+                    Inbox</span></div>
             <div class="nav-item" data-page="payouts"><span
                     class="material-icons-round">payments</span><span>Payouts</span></div>
         </div>
@@ -319,9 +321,32 @@
         <div id="drawerContent"></div>
     </div>
 
-    <!-- Main Content -->
     <div class="main">
-        <div class="page active" id="page-claims">
+        <div class="page active" id="page-dashboard">
+            <div class="page-header">
+                <h2>Dashboard</h2>
+                <div style="margin-top: 15px;">
+                    <button class="btn btn-outline" id="seedDataBtn" onclick="seedMockData()">+ Seed Mock Users &
+                        Claims</button>
+                    <span id="seedStatus" style="font-size:12px; margin-left:10px; color:var(--text2)"></span>
+                </div>
+            </div>
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="label">Total Claims</div>
+                    <div class="value" id="kpi-total">0</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="label">Pending Review</div>
+                    <div class="value warning" id="kpi-pending">0</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="label">Total Payouts (KES)</div>
+                    <div class="value" id="kpi-payouts">0</div>
+                </div>
+            </div>
+        </div>
+        <div class="page" id="page-claims">
             <div class="page-header">
                 <h2>Claims Inbox</h2>
             </div>
@@ -415,6 +440,10 @@
                     </td>
                 </tr>`
                 ).join('');
+
+                // Update KPIs
+                document.getElementById('kpi-total').textContent = claims.length;
+                document.getElementById('kpi-pending').textContent = claims.filter(c => c.status === 'pending' || c.status === 'adjuster_review').length;
             }
 
             // Fetch Payouts
@@ -429,7 +458,38 @@
                     <td>${t.transaction_id || '-'}</td>
                 </tr>`
                 ).join('');
+
+                // Update Payouts KPI
+                const totalPayouts = payouts.filter(p => p.status === 'completed').reduce((sum, p) => sum + (p.amount || 0), 0);
+                document.getElementById('kpi-payouts').textContent = totalPayouts.toLocaleString();
             }
+        }
+
+        async function seedMockData() {
+            const btn = document.getElementById('seedDataBtn');
+            const status = document.getElementById('seedStatus');
+            btn.disabled = true;
+            btn.textContent = 'Seeding...';
+            try {
+                const res = await fetch('/api/admin/seed-mock', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionToken}` }
+                });
+                if (res.ok) {
+                    status.textContent = 'Seed successful! Refreshing...';
+                    status.style.color = '#25D366';
+                    await fetchData();
+                } else {
+                    status.textContent = 'Failed to seed data.';
+                    status.style.color = '#EF4444';
+                }
+            } catch (e) {
+                status.textContent = 'Network error.';
+                status.style.color = '#EF4444';
+            }
+            btn.disabled = false;
+            btn.textContent = '+ Seed Mock Users & Claims';
+            setTimeout(() => status.textContent = '', 4000);
         }
 
         function setupRealtime() {
