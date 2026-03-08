@@ -195,7 +195,9 @@ module.exports = {
     sendText,
     sendTemplate,
     sendInteractiveButtons,
+    sendButtons: sendInteractiveButtons, // Alias
     sendInteractiveList,
+    sendList: sendInteractiveList, // Alias
     sendDocument,
     sendImage,
     markAsRead,
