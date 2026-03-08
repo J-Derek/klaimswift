@@ -5,6 +5,7 @@
  */
 
 const axios = require('axios');
+const https = require('https');
 
 const BASE_URL = `https://graph.facebook.com/v18.0/${process.env.WHATSAPP_PHONE_ID}/messages`;
 const HEADERS = {
@@ -12,18 +13,22 @@ const HEADERS = {
     Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
 };
 
+const axiosInstance = axios.create({
+    httpsAgent: new https.Agent({ keepAlive: true, timeout: 60000 })
+});
+
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 1000;
 
-/**
- * Send request with exponential backoff retry
- */
 async function sendWithRetry(payload, retries = MAX_RETRIES) {
+    console.log(`[WhatsAppService] Attempting to send message to ${BASE_URL}. Payload type:`, payload.type);
     for (let attempt = 0; attempt <= retries; attempt++) {
         try {
-            const res = await axios.post(BASE_URL, payload, { headers: HEADERS });
+            const res = await axiosInstance.post(BASE_URL, payload, { headers: HEADERS });
+            console.log(`[WhatsAppService] Send successful on attempt ${attempt + 1}`);
             return res.data;
         } catch (err) {
+            console.error(`[WhatsAppService] Send error on attempt ${attempt + 1}:`, err.message);
             if (attempt === retries) throw err;
             const delay = BASE_DELAY_MS * Math.pow(2, attempt);
             console.error(`WhatsApp send failed (attempt ${attempt + 1}), retrying in ${delay}ms...`);
@@ -132,7 +137,7 @@ async function sendImage(to, imageUrl, caption) {
  */
 async function markAsRead(messageId) {
     try {
-        return await axios.post(
+        return await axiosInstance.post(
             BASE_URL,
             {
                 messaging_product: 'whatsapp',
