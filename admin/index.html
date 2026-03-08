@@ -458,6 +458,11 @@
         </div>
     </div>
 
+    <!-- Toast Container -->
+    <div id="toast-container"
+        style="position:fixed; bottom:20px; right:20px; z-index:9999; display:flex; flex-direction:column; gap:10px;">
+    </div>
+
     <script>
         // Supabase Config must be filled here!
         const _supabaseUrl = 'https://lmyyzskrjwkmqnslipvi.supabase.co';
@@ -465,6 +470,55 @@
 
         const supabaseClient = window.supabase.createClient(_supabaseUrl, _supabaseAnonKey);
         let sessionToken = null;
+
+        // Toast Notification System
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+
+            // Basic styling
+            toast.style.minWidth = '250px';
+            toast.style.padding = '16px 20px';
+            toast.style.borderRadius = '8px';
+            toast.style.color = '#fff';
+            toast.style.fontFamily = 'Syne, sans-serif';
+            toast.style.fontWeight = '500';
+            toast.style.fontSize = '0.9rem';
+            toast.style.boxShadow = '0 8px 16px rgba(0,0,0,0.2)';
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(20px)';
+            toast.style.transition = 'all 0.3s ease';
+            toast.style.display = 'flex';
+            toast.style.alignItems = 'center';
+            toast.style.gap = '10px';
+
+            let icon = 'check_circle';
+            if (type === 'success') {
+                toast.style.background = 'linear-gradient(135deg, #10B981, #059669)';
+            } else if (type === 'error') {
+                toast.style.background = 'linear-gradient(135deg, #EF4444, #DC2626)';
+                icon = 'error';
+            } else if (type === 'warning') {
+                toast.style.background = 'linear-gradient(135deg, #F59E0B, #D97706)';
+                icon = 'warning';
+            }
+
+            toast.innerHTML = `<span class="material-icons-round">${icon}</span> ${message}`;
+            container.appendChild(toast);
+
+            // Animate in
+            setTimeout(() => {
+                toast.style.opacity = '1';
+                toast.style.transform = 'translateY(0)';
+            }, 10);
+
+            // Animate out and remove
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(20px)';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
 
         // Check Auth
         async function checkAuth() {
@@ -562,7 +616,7 @@
             };
 
             if (!payload.name || !payload.phone || !payload.policy_number) {
-                return alert('Name, Phone, and Policy Number are required.');
+                return showToast('Name, Phone, and Policy Number are required.', 'error');
             }
 
             try {
@@ -574,14 +628,14 @@
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
 
-                alert('Member successfully added!');
+                showToast('Member successfully added!', 'success');
                 document.getElementById('newMemberForm').style.display = 'none';
 
                 // Clear fields
                 ['m_name', 'm_phone', 'm_national_id', 'm_mpesa', 'm_policy'].forEach(id => document.getElementById(id).value = '');
                 fetchData();
             } catch (e) {
-                alert('Failed to add member: ' + e.message);
+                showToast('Failed to add member: ' + e.message, 'error');
             }
         }
 
@@ -601,9 +655,10 @@
                     body: JSON.stringify({ claimId })
                 });
                 const data = await res.json();
-                if (data.error) alert('Error: ' + data.error);
+                if (data.error) return showToast('Error: ' + data.error, 'error');
+                showToast('Claim approved successfully!', 'success');
             } catch (err) {
-                alert('Failed to approve claim');
+                showToast('Failed to approve claim', 'error');
             }
         }
 
