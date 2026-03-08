@@ -98,4 +98,4 @@ CREATE POLICY "Allow authenticated read on mpesa_transactions" ON mpesa_transact
 CREATE POLICY "Allow authenticated read on blockchain_events" ON blockchain_events FOR SELECT TO authenticated USING (true);
 
 -- Blockchain: no updates or deletes (append-only)
-CREATE POLICY "Blockchain append only" ON blockchain_events FOR INSERT TO authenticated USING (true);
+CREATE POLICY "Blockchain append only" ON blockchain_events FOR INSERT TO authenticated WITH CHECK (true);
