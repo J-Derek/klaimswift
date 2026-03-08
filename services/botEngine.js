@@ -227,8 +227,10 @@ async function handleFileConfirm(phone, text, conv) {
     const claimNum = String(Math.floor(Math.random() * 9999999)).padStart(7, '0');
     const claimId = `CLM-${year}-KE-${claimNum}`;
 
+    console.log(`[BotEngine] Submitting claim ${claimId} and updating DB...`);
+
     // Create claim in Supabase
-    await supabase.from('claims').insert({
+    const { error: claimErr } = await supabase.from('claims').insert({
         claim_id: claimId,
         member_id: conv.member_id,
         type: draft.type || 'General',
@@ -242,32 +244,43 @@ async function handleFileConfirm(phone, text, conv) {
             event: 'Claim Filed',
             timestamp: new Date().toISOString(),
             actor: 'customer',
-            note: `Filed via WhatsApp by ${conv.member_name}`,
+            note: `Filed via WhatsApp by ${conv.member_name || 'Member'}`,
         }],
     });
 
-    // Update member claims count
-    await supabase.rpc('increment_claims_count', { member_uuid: conv.member_id }).catch(() => { });
+    if (claimErr) {
+        console.error(`[BotEngine] Claim insertion failed:`, claimErr);
+        await wa.sendText(phone, '❌ *Database Error*\n\nSomething went wrong while saving your claim. Our team has been notified. Please try again in 5 minutes.');
+        return showMenu(phone);
+    }
 
-    // Reset conversation
-    await supabase.from('conversations').update({ state: 'menu', draft: {} }).eq('phone', phone);
+    // Attempt to update member claims count
+    try {
+        await supabase.rpc('increment_claims_count', { member_uuid: conv.member_id });
+    } catch (e) {
+        console.warn(`[BotEngine] increment_claims_count RPC failed or missing:`, e.message);
+    }
 
+    // 1. Send the success message FIRST
     await wa.sendText(phone,
         `✅ *CLAIM SUBMITTED SUCCESSFULLY!*\n\n` +
-        `━━━━━━━━━━━━━━━━\n` +
         `📄 CLAIM ID: *${claimId}*\n` +
         `💰 AMOUNT: KES ${(draft.amountKES || 0).toLocaleString()}\n` +
-        `📋 TYPE: ${draft.type || 'General'}\n` +
-        `━━━━━━━━━━━━━━━━\n\n` +
+        `📋 TYPE: ${draft.type || 'General'}\n\n` +
         `⏳ Your claim is now under review. We'll update you here as it moves to settlement.\n\n` +
-        `Tip: Use the "Track Claim" button in the menu anytime with your ID: *${claimId}*`
+        `💡 Tip: Use "Track Claim" anytime with ID: *${claimId}*`
     );
+
+    // 2. Reset conversation state
+    await supabase.from('conversations').update({ state: 'menu', draft: {} }).eq('phone', phone);
 
     // Trigger async AI verification
     try {
         const docAI = require('./documentAI');
         docAI.processClaimDocuments(claimId).catch(console.error);
-    } catch { }
+    } catch (err) {
+        console.error(`[BotEngine] Failed to trigger documentAI:`, err.message);
+    }
 
     return showMenu(phone);
 }
