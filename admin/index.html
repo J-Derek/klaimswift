@@ -307,6 +307,8 @@
                     class="material-icons-round">dashboard</span><span>Dashboard</span></div>
             <div class="nav-item" data-page="claims"><span class="material-icons-round">description</span><span>Claims
                     Inbox</span></div>
+            <div class="nav-item" data-page="members"><span
+                    class="material-icons-round">people</span><span>Members</span></div>
             <div class="nav-item" data-page="payouts"><span
                     class="material-icons-round">payments</span><span>Payouts</span></div>
         </div>
@@ -325,11 +327,6 @@
         <div class="page active" id="page-dashboard">
             <div class="page-header">
                 <h2>Dashboard</h2>
-                <div style="margin-top: 15px;">
-                    <button class="btn btn-outline" id="seedDataBtn" onclick="seedMockData()">+ Seed Mock Users &
-                        Claims</button>
-                    <span id="seedStatus" style="font-size:12px; margin-left:10px; color:var(--text2)"></span>
-                </div>
             </div>
             <div class="kpi-grid">
                 <div class="kpi-card">
@@ -363,6 +360,54 @@
                         </tr>
                     </thead>
                     <tbody id="claimsTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="page" id="page-members">
+            <div class="page-header">
+                <h2>Insurance Members</h2>
+                <p>Manage policyholders and their M-Pesa details</p>
+                <div style="margin-top: 15px;">
+                    <button class="btn btn-primary"
+                        onclick="document.getElementById('newMemberForm').style.display='block'">+ Add New
+                        Member</button>
+                </div>
+            </div>
+
+            <div class="table-card" id="newMemberForm" style="display:none; padding:20px; background:var(--surface2);">
+                <h3 style="font-family:'Syne'; margin-bottom:15px; color:var(--accent);">Register New Member</h3>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+                    <input type="text" class="search-input" id="m_name" placeholder="Full Name (e.g. Maina Mwangi)">
+                    <input type="text" class="search-input" id="m_phone"
+                        placeholder="WhatsApp Phone (e.g. 254700000000)">
+                    <input type="text" class="search-input" id="m_national_id" placeholder="National ID">
+                    <input type="text" class="search-input" id="m_mpesa" placeholder="M-Pesa Phone (e.g. 254700000000)">
+                    <input type="text" class="search-input" id="m_policy" placeholder="Policy Number (e.g. POL-1004)">
+                    <select class="search-input" id="m_type">
+                        <option value="Comprehensive">Comprehensive</option>
+                        <option value="Third Party">Third Party</option>
+                    </select>
+                </div>
+                <div style="margin-top: 15px; display:flex; gap:10px;">
+                    <button class="btn btn-primary" onclick="submitNewMember()">Save Member</button>
+                    <button class="btn btn-outline"
+                        onclick="document.getElementById('newMemberForm').style.display='none'">Cancel</button>
+                </div>
+            </div>
+
+            <div class="table-card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Phone</th>
+                            <th>M-Pesa Number</th>
+                            <th>Policy Number</th>
+                            <th>National ID</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="membersTableBody"></tbody>
                 </table>
             </div>
         </div>
@@ -422,7 +467,7 @@
             });
         });
 
-        function statusBadge(s) { return { pending: 'yellow', ai_review: 'blue', adjuster_review: 'yellow', approved: 'green', paid: 'green', rejected: 'red', payout_initiated: 'blue', completed: 'green' }[s] || 'gray' }
+        function statusBadge(s) { return { active: 'green', pending: 'yellow', ai_review: 'blue', adjuster_review: 'yellow', approved: 'green', paid: 'green', rejected: 'red', payout_initiated: 'blue', completed: 'green' }[s] || 'gray' }
 
         async function fetchData() {
             // Fetch Claims
@@ -463,11 +508,61 @@
                 const totalPayouts = payouts.filter(p => p.status === 'completed').reduce((sum, p) => sum + (p.amount || 0), 0);
                 document.getElementById('kpi-payouts').textContent = totalPayouts.toLocaleString();
             }
+
+            // Fetch Members
+            const { data: members } = await supabaseClient.from('members').select('*').order('registered_at', { ascending: false });
+            if (members) {
+                document.getElementById('membersTableBody').innerHTML = members.map(m =>
+                    `<tr>
+                    <td style="font-weight:600;">${m.name || '-'}</td>
+                    <td>${m.phone}</td>
+                    <td>${m.mpesa_phone || '-'}</td>
+                    <td>${m.policy_number}</td>
+                    <td>${m.national_id || '-'}</td>
+                    <td><span class="badge ${statusBadge(m.status)}">${m.status || 'Active'}</span></td>
+                </tr>`
+                ).join('');
+            }
+        }
+
+        async function submitNewMember() {
+            const payload = {
+                name: document.getElementById('m_name').value,
+                phone: document.getElementById('m_phone').value,
+                national_id: document.getElementById('m_national_id').value,
+                mpesa_phone: document.getElementById('m_mpesa').value,
+                policy_number: document.getElementById('m_policy').value,
+                insurance_type: document.getElementById('m_type').value,
+            };
+
+            if (!payload.name || !payload.phone || !payload.policy_number) {
+                return alert('Name, Phone, and Policy Number are required.');
+            }
+
+            try {
+                const res = await fetch('/api/admin/add-member', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionToken}` },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                alert('Member successfully added!');
+                document.getElementById('newMemberForm').style.display = 'none';
+
+                // Clear fields
+                ['m_name', 'm_phone', 'm_national_id', 'm_mpesa', 'm_policy'].forEach(id => document.getElementById(id).value = '');
+                fetchData();
+            } catch (e) {
+                alert('Failed to add member: ' + e.message);
+            }
         }
 
         function setupRealtime() {
             supabaseClient.channel('public:claims').on('postgres_changes', { event: '*', schema: 'public', table: 'claims' }, fetchData).subscribe();
             supabaseClient.channel('public:mpesa_transactions').on('postgres_changes', { event: '*', schema: 'public', table: 'mpesa_transactions' }, fetchData).subscribe();
+            supabaseClient.channel('public:members').on('postgres_changes', { event: '*', schema: 'public', table: 'members' }, fetchData).subscribe();
         }
 
         async function approveClaim(claimId) {

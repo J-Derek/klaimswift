@@ -224,4 +224,48 @@ router.post('/reject-claim', async (req, res) => {
     }
 });
 
+// ─── Add Member ───────────────────────────────────────────────
+
+router.post('/add-member', async (req, res) => {
+    try {
+        const { name, phone, national_id, mpesa_phone, policy_number, insurance_type } = req.body;
+
+        if (!name || !phone || !policy_number) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        // Add 254 prefix logic if missing (basic sanitization)
+        let cleanPhone = phone.replace(/[^0-9]/g, '');
+        if (cleanPhone.startsWith('0')) cleanPhone = '254' + cleanPhone.substring(1);
+        if (cleanPhone.startsWith('+')) cleanPhone = cleanPhone.substring(1);
+
+        let cleanMpesa = mpesa_phone ? mpesa_phone.replace(/[^0-9]/g, '') : cleanPhone;
+        if (cleanMpesa.startsWith('0')) cleanMpesa = '254' + cleanMpesa.substring(1);
+        if (cleanMpesa.startsWith('+')) cleanMpesa = cleanMpesa.substring(1);
+
+        const { data, error } = await supabase.from('members').insert({
+            name,
+            phone: cleanPhone,
+            national_id,
+            mpesa_phone: cleanMpesa,
+            policy_number,
+            insurance_type,
+            status: 'active'
+        }).select();
+
+        if (error) {
+            // Check for unique constraint violation on policy_number
+            if (error.code === '23505') {
+                return res.status(400).json({ error: 'A member with this Policy Number or Phone already exists' });
+            }
+            throw error;
+        }
+
+        res.json({ success: true, member: data[0] });
+    } catch (err) {
+        console.error('[Admin] Add member error:', err);
+        res.status(500).json({ error: 'Internal server error while adding member' });
+    }
+});
+
 module.exports = router;
