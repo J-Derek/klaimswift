@@ -2,7 +2,15 @@
     "version": 2,
     "rewrites": [
         {
-            "source": "/(.*)",
+            "source": "/api/(.*)",
+            "destination": "/server.js"
+        },
+        {
+            "source": "/webhook/(.*)",
+            "destination": "/server.js"
+        },
+        {
+            "source": "/health",
             "destination": "/server.js"
         }
     ]
