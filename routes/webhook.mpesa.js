@@ -1,19 +1,12 @@
 /**
- * M-Pesa Daraja Webhook Routes
- * POST /webhook/mpesa/result  — B2C payment result callback
- * POST /webhook/mpesa/timeout — B2C timeout callback
+ * M-Pesa Daraja Webhook Routes — Supabase Version
  */
 
 const express = require('express');
 const router = express.Router();
-const { db, admin } = require('../firebase-config');
+const { supabase } = require('../supabase-config');
 const wa = require('../services/whatsappService');
 
-const FieldValue = admin.firestore.FieldValue;
-
-/**
- * POST /webhook/mpesa/result — Daraja B2C result callback
- */
 router.post('/result', async (req, res) => {
     res.json({ ResultCode: 0, ResultDesc: 'Accepted' });
 
@@ -25,157 +18,126 @@ router.post('/result', async (req, res) => {
         const resultCode = result.ResultCode;
         const transactionId = result.TransactionID;
 
-        console.log(`[M-Pesa] Result: ConvID=${conversationId}, Code=${resultCode}, TxID=${transactionId}`);
-
-        // Find the pending transaction
-        const txSnap = await db.collection('mpesa_transactions')
-            .where('conversationId', '==', conversationId)
+        const { data: txDoc } = await supabase
+            .from('mpesa_transactions')
+            .select('*')
+            .eq('conversation_id', conversationId)
             .limit(1)
-            .get();
+            .single();
 
-        if (txSnap.empty) {
+        if (!txDoc) {
             console.error(`[M-Pesa] No transaction found for ConvID: ${conversationId}`);
             return;
         }
 
-        const txDoc = txSnap.docs[0];
-        const txData = txDoc.data();
-
         if (resultCode === 0) {
-            // ── SUCCESS ──
-            // Parse result parameters
-            const params = {};
-            if (result.ResultParameters?.ResultParameter) {
-                for (const p of result.ResultParameters.ResultParameter) {
-                    params[p.Key] = p.Value;
-                }
-            }
-
-            // Update transaction record
-            await txDoc.ref.update({
+            // SUCCESS
+            await supabase.from('mpesa_transactions').update({
                 status: 'completed',
-                transactionId,
-                resultCode,
-                resultDesc: result.ResultDesc,
-                completedAt: FieldValue.serverTimestamp(),
-                resultParams: params,
-            });
+                transaction_id: transactionId,
+                result_desc: result.ResultDesc,
+                completed_at: new Date().toISOString(),
+            }).eq('id', txDoc.id);
 
             // Update claim status → paid
-            if (txData.claimId) {
-                await db.collection('claims').doc(txData.claimId).update({
+            if (txDoc.claim_id) {
+                const { data: claim } = await supabase.from('claims').select('timeline').eq('claim_id', txDoc.claim_id).single();
+
+                await supabase.from('claims').update({
                     status: 'paid',
-                    mpesaTransactionId: transactionId,
-                    updatedAt: FieldValue.serverTimestamp(),
-                    timeline: FieldValue.arrayUnion({
+                    updated_at: new Date().toISOString(),
+                    timeline: [...(claim?.timeline || []), {
                         event: 'M-Pesa Payout Confirmed',
                         timestamp: new Date().toISOString(),
                         actor: 'system',
                         note: `TX: ${transactionId}`,
-                    }),
-                });
+                    }],
+                }).eq('claim_id', txDoc.claim_id);
             }
 
-            // Send WhatsApp confirmation to customer
-            if (txData.phone) {
+            // WhatsApp confirmation
+            if (txDoc.phone) {
                 try {
-                    await wa.sendTemplate(txData.phone, 'mpesa_sent', [{
+                    await wa.sendTemplate(txDoc.phone, 'mpesa_sent', [{
                         type: 'body',
                         parameters: [
-                            { type: 'text', text: String(txData.amount) },
-                            { type: 'text', text: txData.phone },
+                            { type: 'text', text: String(txDoc.amount) },
+                            { type: 'text', text: txDoc.phone },
                             { type: 'text', text: transactionId },
-                            { type: 'text', text: txData.claimId || '' },
+                            { type: 'text', text: txDoc.claim_id || '' },
                         ],
                     }]);
                 } catch {
-                    await wa.sendText(txData.phone,
-                        `✅ *M-Pesa Sent!*\nKES ${txData.amount?.toLocaleString()} → ${txData.phone}\n` +
-                        `Confirmation: ${transactionId}\nClaim: ${txData.claimId}`
+                    await wa.sendText(txDoc.phone,
+                        `✅ *M-Pesa Sent!*\nKES ${txDoc.amount?.toLocaleString()} → ${txDoc.phone}\n` +
+                        `Confirmation: ${transactionId}\nClaim: ${txDoc.claim_id}`
                     );
                 }
             }
 
-            // Write blockchain event
+            // Blockchain
             try {
                 const blockchain = require('../services/blockchainService');
                 await blockchain.writeAuditEvent({
                     eventType: 'MPESA_PAYOUT_CONFIRMED',
-                    claimId: txData.claimId,
+                    claimId: txDoc.claim_id,
                     actorId: 'daraja',
                     actorType: 'system',
-                    data: { transactionId, amount: txData.amount },
+                    data: { transactionId, amount: txDoc.amount },
                     timestamp: new Date().toISOString(),
                 });
             } catch { }
 
         } else {
-            // ── FAILURE ──
-            await txDoc.ref.update({
+            // FAILURE
+            await supabase.from('mpesa_transactions').update({
                 status: 'failed',
-                resultCode,
-                resultDesc: result.ResultDesc,
-                failedAt: FieldValue.serverTimestamp(),
-            });
+                result_desc: result.ResultDesc,
+            }).eq('id', txDoc.id);
 
-            // Revert claim to approved (not paid)
-            if (txData.claimId) {
-                await db.collection('claims').doc(txData.claimId).update({
+            // Revert claim
+            if (txDoc.claim_id) {
+                const { data: claim } = await supabase.from('claims').select('timeline').eq('claim_id', txDoc.claim_id).single();
+                await supabase.from('claims').update({
                     status: 'approved',
-                    updatedAt: FieldValue.serverTimestamp(),
-                    timeline: FieldValue.arrayUnion({
+                    updated_at: new Date().toISOString(),
+                    timeline: [...(claim?.timeline || []), {
                         event: 'M-Pesa Payout Failed',
                         timestamp: new Date().toISOString(),
                         actor: 'system',
                         note: result.ResultDesc,
-                    }),
-                });
+                    }],
+                }).eq('claim_id', txDoc.claim_id);
             }
-
-            // Notify admin via Realtime DB
-            const { rtdb } = require('../firebase-config');
-            await rtdb.ref('notifications/mpesa_failures').push({
-                claimId: txData.claimId,
-                amount: txData.amount,
-                error: result.ResultDesc,
-                timestamp: new Date().toISOString(),
-            });
         }
     } catch (err) {
         console.error('[M-Pesa] Result processing error:', err);
     }
 });
 
-/**
- * POST /webhook/mpesa/timeout — Daraja B2C timeout
- */
 router.post('/timeout', async (req, res) => {
     res.json({ ResultCode: 0, ResultDesc: 'Accepted' });
 
     try {
-        console.warn('[M-Pesa] Timeout callback received:', JSON.stringify(req.body));
-
-        // Mark transaction as timed out
         const result = req.body?.Result;
         if (result?.ConversationID) {
-            const snap = await db.collection('mpesa_transactions')
-                .where('conversationId', '==', result.ConversationID)
+            const { data: txDoc } = await supabase
+                .from('mpesa_transactions')
+                .select('*')
+                .eq('conversation_id', result.ConversationID)
                 .limit(1)
-                .get();
+                .single();
 
-            if (!snap.empty) {
-                const txDoc = snap.docs[0];
-                await txDoc.ref.update({
+            if (txDoc) {
+                await supabase.from('mpesa_transactions').update({
                     status: 'timeout',
-                    timedOutAt: FieldValue.serverTimestamp(),
-                });
+                }).eq('id', txDoc.id);
 
-                // Revert claim status
-                if (txDoc.data().claimId) {
-                    await db.collection('claims').doc(txDoc.data().claimId).update({
+                if (txDoc.claim_id) {
+                    await supabase.from('claims').update({
                         status: 'approved',
-                        updatedAt: FieldValue.serverTimestamp(),
-                    });
+                        updated_at: new Date().toISOString(),
+                    }).eq('claim_id', txDoc.claim_id);
                 }
             }
         }

@@ -9,6 +9,7 @@
         "test": "node --test tests/"
     },
     "dependencies": {
+        "@supabase/supabase-js": "^2.98.0",
         "axios": "^1.7.0",
         "cors": "^2.8.5",
         "dotenv": "^16.4.0",
