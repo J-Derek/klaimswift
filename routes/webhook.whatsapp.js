@@ -38,9 +38,10 @@ router.post('/', (req, res) => {
     // Verify signature
     const signature = req.headers['x-hub-signature-256'];
     if (signature && process.env.WHATSAPP_APP_SECRET) {
+        const payload = req.rawBody || JSON.stringify(req.body);
         const expectedSig = 'sha256=' +
             crypto.createHmac('sha256', process.env.WHATSAPP_APP_SECRET)
-                .update(JSON.stringify(req.body))
+                .update(payload)
                 .digest('hex');
         if (signature !== expectedSig) {
             console.warn('[WhatsApp] Invalid webhook signature');
