@@ -1,62 +1,67 @@
+/**
+ * KlaimSwift — Claim Simulation Script
+ * Creates mock claims in Supabase to test Admin Dashboard real-time updates.
+ */
+
 require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 
-// 1. Initialize Supabase
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
 
-if (!supabaseUrl || !supabaseKey) {
-    console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env");
-    process.exit(1);
-}
+const claimTypes = ['Motor Vehicle', 'Medical', 'Property', 'Life Insurance'];
+const incidentDescriptions = [
+    "Minor bumper scratch in traffic.",
+    "Emergency dental surgery required.",
+    "Water damage from kitchen leak.",
+    "Property boundary wall damage.",
+    "Accidental loss of electronic equipment."
+];
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+async function simulate() {
+    console.log('--- KlaimSwift Claim Simulator ---');
 
-async function generateClaimsForMembers() {
-    console.log("Fetching members from database...");
-    const { data: members, error: membersError } = await supabase.from('members').select('*');
-
-    if (membersError) {
-        console.error("Error fetching members:", membersError);
+    // 1. Get a random member
+    const { data: members, error: mErr } = await supabase.from('members').select('id, name').limit(10);
+    if (mErr || !members.length) {
+        console.error('No members found. Please run seed_kenyan_users.sql first.');
         return;
     }
 
-    if (!members || members.length === 0) {
-        console.log("No members found. Please register a member in the Admin Panel first.");
-        return;
-    }
+    const member = members[Math.floor(Math.random() * members.length)];
+    const type = claimTypes[Math.floor(Math.random() * claimTypes.length)];
+    const amount = Math.floor(Math.random() * 50000) + 5000;
+    const desc = incidentDescriptions[Math.floor(Math.random() * incidentDescriptions.length)];
 
-    console.log(`Found ${members.length} members. Generating claims...\n`);
+    const year = new Date().getFullYear();
+    const claimNum = String(Math.floor(Math.random() * 9999999)).padStart(7, '0');
+    const claimId = `SIM-${year}-KE-${claimNum}`;
 
-    const claimsToInsert = [];
+    console.log(`Generating simulated claim for: ${member.name}`);
 
-    for (const member of members) {
-        // Generate 1-2 random claims for this member
-        const numClaims = Math.floor(Math.random() * 2) + 1;
+    // 2. Insert claim
+    const { data, error } = await supabase.from('claims').insert({
+        claim_id: claimId,
+        member_id: member.id,
+        type,
+        amount_kes: amount,
+        incident_date: new Date().toISOString().split('T')[0],
+        description: desc,
+        status: 'pending',
+        channel: 'WhatsApp (Simulated)',
+        timeline: [{
+            event: 'Claim Filed',
+            timestamp: new Date().toISOString(),
+            actor: 'customer',
+            note: `Simulated file for ${member.name}`,
+        }],
+    }).select();
 
-        for (let i = 0; i < numClaims; i++) {
-            claimsToInsert.push({
-                phone: member.phone,
-                type: Math.random() > 0.5 ? 'accidental_damage' : 'windscreen_damage',
-                description: `Simulated claim for ${member.name}. Occurred on Mombasa Road.`,
-                amount_kes: Math.floor(Math.random() * 40000) + 10000,
-                status: 'pending',
-                ai_score: Math.floor(Math.random() * 40) + 50, // Score between 50-90
-                ai_summary: 'Evidence appears consistent with descriptions.',
-                evidence_urls: ['https://storage.googleapis.com/test/car_damage.jpg']
-            });
-        }
-    }
-
-    // Insert into DB
-    const { data: insertedClaims, error: insertError } = await supabase.from('claims').insert(claimsToInsert).select();
-
-    if (insertError) {
-        console.error("Error inserting simulated claims:", insertError);
+    if (error) {
+        console.error('Simulation Failed:', error.message);
     } else {
-        console.log(`✅ Successfully inserted ${insertedClaims.length} realistic claims into the Inbox!`);
-        console.log("Refresh the Admin Dashboard to see them.");
+        console.log(`✅ SUCCESS! Simulated Claim Created: ${claimId}`);
+        console.log(`Check your Admin Dashboard now. It should have updated in real-time!`);
     }
 }
 
-generateClaimsForMembers();
+simulate();
