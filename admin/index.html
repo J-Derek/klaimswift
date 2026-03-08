@@ -717,7 +717,11 @@
             const { data: { session } } = await supabaseClient.auth.getSession();
             if (!session) return window.location.href = 'login.html';
             sessionToken = session.access_token;
-            document.getElementById('adminEmail').textContent = session.user.email;
+            // Guard against the ID change to 'userEmail' and static 'Admin' text
+            const emailEl = document.getElementById('userEmail');
+            if (emailEl && emailEl.textContent !== 'Admin') {
+                emailEl.textContent = session.user.email;
+            }
             fetchData();
             setupRealtime();
         }
@@ -747,109 +751,111 @@
         function statusBadge(s) { return { active: 'green', pending: 'yellow', ai_review: 'blue', adjuster_review: 'yellow', approved: 'green', paid: 'green', rejected: 'red', payout_initiated: 'blue', completed: 'green' }[s] || 'gray' }
 
         async function fetchData() {
-            // Fetch All Claims for distribution
-            const { data: claims } = await supabaseClient.from('claims').select('*').order('filed_at', { ascending: false });
-            if (claims) {
-                // 1. Claims Inbox Table
-                document.getElementById('claimsTableBody').innerHTML = claims.map(c =>
-                    `<tr>
-                        <td>${c.claim_id}</td>
-                        <td>${c.type}</td>
-                        <td>KES ${(c.amount_kes || 0).toLocaleString()}</td>
-                        <td><span class="badge ${statusBadge(c.status)}">${c.status}</span></td>
-                        <td>${c.ai_score || '-'}</td>
-                        <td>
-                            <button class="btn btn-primary" onclick="approveClaim('${c.claim_id}')" ${c.status !== 'pending' && c.status !== 'adjuster_review' ? 'disabled' : ''}>Approve</button>
-                        </td>
-                    </tr>`
-                ).join('');
+            try {
+                // Fetch All Claims
+                const { data: claims, error: claimsErr } = await supabaseClient.from('claims').select('*').order('filed_at', { ascending: false });
+                if (claimsErr) throw claimsErr;
 
-                // 2. Recent Claims Feed (Dashboard)
-                document.getElementById('recentClaimsFeed').innerHTML = claims.slice(0, 5).map(c =>
-                    `<div class="feed-item" style="padding:12px 0; border-bottom:1px solid rgba(59, 74, 84, .3);">
-                        <div style="display:flex; justify-content:space-between; align-items:center">
-                            <strong>${c.claim_id}</strong>
-                            <span class="badge ${statusBadge(c.status)}" style="zoom:0.8">${c.status}</span>
-                        </div>
-                        <div style="font-size:12px; color:var(--text2); margin-top:4px">${c.type} — KES ${(c.amount_kes || 0).toLocaleString()}</div>
-                    </div>`
-                ).join('');
+                if (claims) {
+                    // 1. Claims Inbox Table
+                    document.getElementById('claimsTableBody').innerHTML = claims.map(c =>
+                        `<tr>
+                            <td>${c.claim_id}</td>
+                            <td>${c.type}</td>
+                            <td>KES ${(c.amount_kes || 0).toLocaleString()}</td>
+                            <td><span class="badge ${statusBadge(c.status)}">${c.status}</span></td>
+                            <td>${c.ai_score || '-'}</td>
+                            <td>
+                                <button class="btn btn-primary" onclick="approveClaim('${c.claim_id}')" ${c.status !== 'pending' && c.status !== 'adjuster_review' ? 'disabled' : ''}>Approve</button>
+                            </td>
+                        </tr>`
+                    ).join('');
 
-                // 3. AI Verification Table (Claims with AI Scores)
-                document.getElementById('verificationTableBody').innerHTML = claims.filter(c => c.ai_score != null).map(c =>
-                    `<tr>
-                        <td>${c.claim_id}</td>
-                        <td>${c.type}</td>
-                        <td>${c.ai_score}</td>
-                        <td><span class="badge ${c.ai_score > 75 ? 'green' : c.ai_score > 50 ? 'yellow' : 'red'}">${c.ai_verdict || (c.ai_score > 75 ? 'safe' : 'review')}</span></td>
-                        <td><span class="badge ${statusBadge(c.status)}">${c.status}</span></td>
-                    </tr>`
-                ).join('');
+                    // 2. Recent Claims Feed (Dashboard)
+                    document.getElementById('recentClaimsFeed').innerHTML = claims.slice(0, 5).map(c =>
+                        `<div class="feed-item" style="padding:12px 0; border-bottom:1px solid rgba(59, 74, 84, .3);">
+                            <div style="display:flex; justify-content:space-between; align-items:center">
+                                <strong>${c.claim_id}</strong>
+                                <span class="badge ${statusBadge(c.status)}" style="zoom:0.8">${c.status}</span>
+                            </div>
+                            <div style="font-size:12px; color:var(--text2); margin-top:4px">${c.type} — KES ${(c.amount_kes || 0).toLocaleString()}</div>
+                        </div>`
+                    ).join('');
 
-                // 4. Fraud Alerts Table (Low AI Scores or flagged)
-                const flagged = claims.filter(c => c.ai_score != null && c.ai_score < 40);
-                document.getElementById('fraudTableBody').innerHTML = flagged.map(c =>
-                    `<tr>
-                        <td>${c.claim_id}</td>
-                        <td>${c.type}</td>
-                        <td>${c.ai_score}</td>
-                        <td><span class="badge red">High Risk</span></td>
-                        <td>
-                            <button class="btn btn-danger btn-sm" onclick="showToast('Fraud confirmed', 'error')">Flag</button>
-                        </td>
-                    </tr>`
-                ).join('') || '<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text2)">No active fraud alerts</td></tr>';
+                    // 3. AI Verification Table
+                    document.getElementById('verificationTableBody').innerHTML = claims.filter(c => c.ai_score != null).map(c =>
+                        `<tr>
+                            <td>${c.claim_id}</td>
+                            <td>${c.type}</td>
+                            <td>${c.ai_score}</td>
+                            <td><span class="badge ${c.ai_score > 75 ? 'green' : c.ai_score > 50 ? 'yellow' : 'red'}">${c.ai_verdict || (c.ai_score > 75 ? 'safe' : 'review')}</span></td>
+                            <td><span class="badge ${statusBadge(c.status)}">${c.status}</span></td>
+                        </tr>`
+                    ).join('');
 
-                // 5. Adjuster Queue Table
-                document.getElementById('adjusterTableBody').innerHTML = claims.filter(c => c.status === 'adjuster_review').map(c =>
-                    `<tr>
-                        <td>${c.claim_id}</td>
-                        <td>${c.type}</td>
-                        <td>KES ${(c.amount_kes || 0).toLocaleString()}</td>
-                        <td><span class="badge yellow">Adjuster Review</span></td>
-                        <td>
-                            <button class="btn btn-primary btn-sm" onclick="approveClaim('${c.claim_id}')">Approve</button>
-                        </td>
-                    </tr>`
-                ).join('') || '<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text2)">Queue empty</td></tr>';
+                    // 4. Fraud Alerts Table
+                    const flagged = claims.filter(c => c.ai_score != null && c.ai_score < 40);
+                    document.getElementById('fraudTableBody').innerHTML = flagged.map(c =>
+                        `<tr>
+                            <td>${c.claim_id}</td>
+                            <td>${c.type}</td>
+                            <td>${c.ai_score}</td>
+                            <td><span class="badge red">High Risk</span></td>
+                            <td><button class="btn btn-danger btn-sm" onclick="showToast('Fraud confirmed', 'error')">Flag</button></td>
+                        </tr>`
+                    ).join('') || '<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text2)">No active fraud alerts</td></tr>';
 
-                // Update Dashboard KPIs
-                document.getElementById('kpi-total').textContent = claims.length;
-                document.getElementById('kpi-pending').textContent = claims.filter(c => c.status === 'pending' || c.status === 'adjuster_review').length;
-                document.getElementById('kpi-fraud').textContent = flagged.length;
-            }
+                    // 5. Adjuster Queue Table
+                    document.getElementById('adjusterTableBody').innerHTML = claims.filter(c => c.status === 'adjuster_review').map(c =>
+                        `<tr>
+                            <td>${c.claim_id}</td>
+                            <td>${c.type}</td>
+                            <td>KES ${(c.amount_kes || 0).toLocaleString()}</td>
+                            <td><span class="badge yellow">Adjuster Review</span></td>
+                            <td><button class="btn btn-primary btn-sm" onclick="approveClaim('${c.claim_id}')">Approve</button></td>
+                        </tr>`
+                    ).join('') || '<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--text2)">Queue empty</td></tr>';
 
-            // Fetch Payouts
-            const { data: payouts } = await supabaseClient.from('mpesa_transactions').select('*').order('initiated_at', { ascending: false });
-            if (payouts) {
-                document.getElementById('payoutsTableBody').innerHTML = payouts.map(t =>
-                    `<tr>
-                    <td>${t.claim_id}</td>
-                    <td>KES ${(t.amount || 0).toLocaleString()}</td>
-                    <td>${t.phone}</td>
-                    <td><span class="badge ${statusBadge(t.status)}">${t.status}</span></td>
-                    <td>${t.transaction_id || '-'}</td>
-                </tr>`
-                ).join('');
+                    // Update Dashboard KPIs
+                    document.getElementById('kpi-total').textContent = claims.length;
+                    document.getElementById('kpi-pending').textContent = claims.filter(c => c.status === 'pending' || c.status === 'adjuster_review').length;
+                    document.getElementById('kpi-fraud').textContent = flagged.length;
+                }
 
-                // Update Payouts KPI
-                const totalPayouts = payouts.filter(p => p.status === 'completed').reduce((sum, p) => sum + (p.amount || 0), 0);
-                document.getElementById('kpi-payouts').textContent = totalPayouts.toLocaleString();
-            }
+                // Fetch Payouts
+                const { data: payouts } = await supabaseClient.from('mpesa_transactions').select('*').order('initiated_at', { ascending: false });
+                if (payouts) {
+                    document.getElementById('payoutsTableBody').innerHTML = payouts.map(t =>
+                        `<tr>
+                            <td>${t.claim_id}</td>
+                            <td>KES ${(t.amount || 0).toLocaleString()}</td>
+                            <td>${t.phone}</td>
+                            <td><span class="badge ${statusBadge(t.status)}">${t.status}</span></td>
+                            <td>${t.transaction_id || '-'}</td>
+                        </tr>`
+                    ).join('');
 
-            // Fetch Members
-            const { data: members } = await supabaseClient.from('members').select('*').order('registered_at', { ascending: false });
-            if (members) {
-                document.getElementById('membersTableBody').innerHTML = members.map(m =>
-                    `<tr>
-                    <td style="font-weight:600;">${m.name || '-'}</td>
-                    <td>${m.phone}</td>
-                    <td>${m.mpesa_phone || '-'}</td>
-                    <td>${m.policy_number}</td>
-                    <td>${m.national_id || '-'}</td>
-                    <td><span class="badge ${statusBadge(m.status)}">${m.status || 'Active'}</span></td>
-                </tr>`
-                ).join('');
+                    const totalPayouts = payouts.filter(p => p.status === 'completed').reduce((sum, p) => sum + (p.amount || 0), 0);
+                    document.getElementById('kpi-payouts').textContent = totalPayouts.toLocaleString();
+                }
+
+                // Fetch Members
+                const { data: members } = await supabaseClient.from('members').select('*').order('registered_at', { ascending: false });
+                if (members) {
+                    document.getElementById('membersTableBody').innerHTML = members.map(m =>
+                        `<tr>
+                            <td style="font-weight:600;">${m.name || '-'}</td>
+                            <td>${m.phone}</td>
+                            <td>${m.mpesa_phone || '-'}</td>
+                            <td>${m.policy_number}</td>
+                            <td>${m.national_id || '-'}</td>
+                            <td><span class="badge ${statusBadge(m.status)}">${m.status || 'Active'}</span></td>
+                        </tr>`
+                    ).join('');
+                }
+            } catch (err) {
+                console.error("fetchData error:", err);
+                showToast("Connection Error: Check console for details.", "error");
             }
         }
 
