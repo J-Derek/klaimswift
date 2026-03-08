@@ -62,6 +62,8 @@ async function process(phone, message) {
             case 'verify': return handleVerify(phone, text, conv);
             case 'menu': return handleMenu(phone, text, conv);
             case 'file-date': return handleFileDate(phone, text, conv);
+            case 'file-amount': return handleFileAmount(phone, text, conv);
+            case 'file-type': return handleFileType(phone, text, conv);
             case 'file-docs': return handleFileDocs(phone, message, conv);
             case 'file-confirm': return handleFileConfirm(phone, text, conv);
             case 'tracking': return handleTracking(phone, text, conv);
@@ -149,47 +151,46 @@ async function handleMenu(phone, text, conv) {
 }
 
 async function handleFileType(phone, text, conv) {
-    const types = ['Motor Vehicle', 'Medical', 'Property', 'Life Insurance'];
-    const type = types.find(t => t.toLowerCase() === text.toLowerCase()) || text;
-    const draft = { ...(conv.draft || {}), type };
-    await supabase.from('conversations').update({ state: 'file-date', draft }).eq('phone', phone);
-    return wa.sendText(phone, `📅 When did the incident happen?\n\nFormat: DD/MM/YYYY\nExample: 15/01/2025`);
+    const draft = { ...(conv.draft || {}), type: text };
+    await supabase.from('conversations').update({ state: 'file-docs', draft }).eq('phone', phone);
+    return wa.sendText(phone, '📎 Please upload your supporting documents (photos, receipts, reports).\n\nType *done* when finished.');
 }
 
 async function handleFileDate(phone, text, conv) {
     const draft = { ...(conv.draft || {}), incidentDate: text };
-    await supabase.from('conversations').update({ state: 'file-docs', draft }).eq('phone', phone);
-    return wa.sendText(phone, '📎 Please upload your supporting documents (photos, receipts, reports).\n\nSend *done* when you have uploaded all documents.');
+    await supabase.from('conversations').update({ state: 'file-amount', draft }).eq('phone', phone);
+    return wa.sendText(phone, '💰 What is the estimated claim amount in KES?\n\nExample: 50000');
 }
 
 async function handleFileAmount(phone, text, conv) {
-    const amount = parseInt(text.replace(/[,\s]/g, ''), 10);
+    const amount = parseFloat(text.replace(/[^0-9.]/g, ''));
     if (isNaN(amount) || amount <= 0) {
-        return wa.sendText(phone, '❌ Please enter a valid amount in KES:');
+        return wa.sendText(phone, '❌ Please enter a valid number for the amount (e.g., 25000):');
     }
     const draft = { ...(conv.draft || {}), amountKES: amount };
-    await supabase.from('conversations').update({ state: 'file-desc', draft }).eq('phone', phone);
-    return wa.sendText(phone, '📝 Briefly describe what happened:');
-}
+    await supabase.from('conversations').update({ state: 'file-type', draft }).eq('phone', phone);
 
-async function handleFileDesc(phone, text, conv) {
-    const draft = { ...(conv.draft || {}), description: text };
-    await supabase.from('conversations').update({ state: 'file-docs', draft }).eq('phone', phone);
-    return wa.sendText(phone, '📎 Please upload your supporting documents (photos, receipts, reports).\n\nSend *done* when you have uploaded all documents.');
+    return wa.sendInteractiveButtons(phone, '📋 Select the insurance type for this claim:', [
+        { id: 'Motor Vehicle', title: '🚗 Motor' },
+        { id: 'Medical', title: '🏥 Medical' },
+        { id: 'Property', title: '🏠 Property' },
+        { id: 'Life Insurance', title: '💼 Life' },
+    ]);
 }
 
 async function handleFileDocs(phone, message, conv) {
     const text = extractText(message);
     if (text.toLowerCase() === 'done') {
-        await supabase.from('conversations').update({ state: 'file-confirm' }).eq('phone', phone);
         const draft = conv.draft || {};
-
-        // Auto-detect type if not set
-        const type = draft.type || 'General';
+        if (!draft.documents || draft.documents.length === 0) {
+            return wa.sendText(phone, '⚠️ Please upload at least one document before finishing.');
+        }
+        await supabase.from('conversations').update({ state: 'file-confirm' }).eq('phone', phone);
 
         const summaryText = `📋 *Claim Summary*\n\n` +
-            `Type: ${type}\n` +
-            `Date: ${draft.incidentDate}\n` +
+            `Type: ${draft.type || 'General'}\n` +
+            `Date: ${draft.incidentDate || 'N/A'}\n` +
+            `Amount: KES ${(draft.amountKES || 0).toLocaleString()}\n` +
             `Documents: ${(draft.documents || []).length}\n\n` +
             `Submit this claim?`;
 
@@ -216,7 +217,7 @@ async function handleFileDocs(phone, message, conv) {
 }
 
 async function handleFileConfirm(phone, text, conv) {
-    if (text.toLowerCase().includes('no') || text === 'confirm_no') {
+    if (text.toLowerCase().includes('no') || text === 'confirm_no' || text === 'file_confirm_no') {
         await supabase.from('conversations').update({ state: 'menu', draft: {} }).eq('phone', phone);
         return wa.sendText(phone, '❌ Claim cancelled. Returning to menu.');
     }
@@ -230,10 +231,10 @@ async function handleFileConfirm(phone, text, conv) {
     await supabase.from('claims').insert({
         claim_id: claimId,
         member_id: conv.member_id,
-        type: draft.type || 'General', // Default to 'General' if not set
-        amount_kes: draft.amountKES || 0, // Default to 0 if not set
+        type: draft.type || 'General',
+        amount_kes: draft.amountKES || 0,
         incident_date: draft.incidentDate,
-        description: draft.description || 'No description provided.', // Default description
+        description: draft.description || 'WhatsApp Submission',
         status: 'pending',
         channel: 'WhatsApp',
         documents: draft.documents || [],
@@ -252,12 +253,14 @@ async function handleFileConfirm(phone, text, conv) {
     await supabase.from('conversations').update({ state: 'menu', draft: {} }).eq('phone', phone);
 
     await wa.sendText(phone,
-        `✅ *Claim Submitted Successfully!*\n\n` +
-        `📄 Claim ID: *${claimId}*\n` +
-        `💰 Amount: KES ${(draft.amountKES || 0).toLocaleString()}\n` +
-        `📋 Type: ${draft.type || 'General'}\n\n` +
-        `⏳ Est. settlement: 2-3 business days\n` +
-        `We'll update you at every step.`
+        `✅ *CLAIM SUBMITTED SUCCESSFULLY!*\n\n` +
+        `━━━━━━━━━━━━━━━━\n` +
+        `📄 CLAIM ID: *${claimId}*\n` +
+        `💰 AMOUNT: KES ${(draft.amountKES || 0).toLocaleString()}\n` +
+        `📋 TYPE: ${draft.type || 'General'}\n` +
+        `━━━━━━━━━━━━━━━━\n\n` +
+        `⏳ Your claim is now under review. We'll update you here as it moves to settlement.\n\n` +
+        `Tip: Use the "Track Claim" button in the menu anytime with your ID: *${claimId}*`
     );
 
     // Trigger async AI verification
@@ -295,13 +298,17 @@ async function handleTracking(phone, text, conv) {
     const statusMsg = `🔍 *Claim Status Update*\n\n` +
         `📄 ID: *${claim.claim_id}*\n` +
         `📅 Date Filed: ${new Date(claim.filed_at).toLocaleDateString()}\n` +
-        `💼 status: ${icon} *${claim.status.toUpperCase()}*\n\n` +
+        `💼 Status: ${icon} *${claim.status.toUpperCase()}*\n\n` +
         `Note: We will notify you of any changes here. Type *menu* to return.`;
 
     return wa.sendText(phone, statusMsg);
 }
 
 async function handleAgent(phone, text, conv) {
+    if (text.toLowerCase() === 'menu') {
+        await supabase.from('conversations').update({ state: 'menu', needs_agent: false }).eq('phone', phone);
+        return showMenu(phone);
+    }
     return wa.sendText(phone, '💬 Your message has been forwarded to our team. Type *menu* to return.');
 }
 
@@ -316,3 +323,4 @@ function extractText(message) {
 }
 
 module.exports = { process };
+

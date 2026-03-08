@@ -11,6 +11,7 @@
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <style>
         /* Same styles as mock version */
         * {
@@ -323,6 +324,42 @@
         <div id="drawerContent"></div>
     </div>
 
+    <!-- Registration Success Modal -->
+    <div class="drawer-overlay" id="modalOverlay"></div>
+    <div class="drawer" id="successModal"
+        style="width: 400px; height: auto; top: 15%; right: 50%; transform: translateX(50%); border-radius: 16px; border: 1px solid var(--accent); padding: 32px; box-shadow: 0 20px 40px rgba(0,0,0,0.4);">
+        <div style="text-align: center; margin-bottom: 24px;">
+            <span class="material-icons-round" style="font-size: 64px; color: var(--accent);">check_circle</span>
+            <h2 style="font-family: 'Syne'; margin-top: 16px;">Registration Successful</h2>
+            <p style="color: var(--text2); font-size: 14px;">Member has been registered with Policy ID:</p>
+            <h3 id="conf-policy" style="color: var(--accent); margin: 8px 0; font-family: 'Syne'; letter-spacing: 1px;">
+            </h3>
+        </div>
+        <div
+            style="background: var(--surface2); padding: 16px; border-radius: 8px; font-size: 13px; margin-bottom: 24px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="color: var(--text2);">Full Name</span>
+                <span id="conf-name" style="font-weight: 600;"></span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="color: var(--text2);">Coverage</span>
+                <span id="conf-type" style="font-weight: 600;"></span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+                <span style="color: var(--text2);">WhatsApp</span>
+                <span id="conf-phone" style="font-weight: 600;"></span>
+            </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+            <button class="btn btn-primary"
+                style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;"
+                onclick="downloadMemberPDF()">
+                <span class="material-icons-round" style="font-size: 18px;">download</span> Download Member PDF
+            </button>
+            <button class="btn btn-outline" style="width: 100%;" onclick="closeSuccessModal()">Close</button>
+        </div>
+    </div>
+
     <div class="main">
         <div class="page active" id="page-dashboard">
             <div class="page-header">
@@ -368,8 +405,7 @@
                 <h2>Insurance Members</h2>
                 <p>Manage policyholders and their M-Pesa details</p>
                 <div style="margin-top: 15px;">
-                    <button class="btn btn-primary"
-                        onclick="document.getElementById('newMemberForm').style.display='block'">+ Add New
+                    <button class="btn btn-primary" onclick="showNewMemberForm()">+ Add New
                         Member</button>
                 </div>
             </div>
@@ -631,12 +667,83 @@
                 showToast('Member successfully added!', 'success');
                 document.getElementById('newMemberForm').style.display = 'none';
 
+                // Show confirmation modal
+                document.getElementById('conf-name').textContent = payload.name;
+                document.getElementById('conf-policy').textContent = payload.policy_number;
+                document.getElementById('conf-type').textContent = payload.insurance_type;
+                document.getElementById('conf-phone').textContent = payload.phone;
+
+                document.getElementById('modalOverlay').classList.add('open');
+                document.getElementById('successModal').classList.add('open');
+
                 // Clear fields
                 ['m_name', 'm_phone', 'm_national_id', 'm_mpesa', 'm_policy'].forEach(id => document.getElementById(id).value = '');
                 fetchData();
             } catch (e) {
                 showToast('Failed to add member: ' + e.message, 'error');
             }
+        }
+
+        function showNewMemberForm() {
+            document.getElementById('newMemberForm').style.display = 'block';
+            updatePolicyPreview();
+        }
+
+        function updatePolicyPreview() {
+            const year = new Date().getFullYear();
+            const type = document.getElementById('m_type').value || 'MTR';
+            const typeCode = type.substring(0, 3).toUpperCase();
+
+            // If it already has a random number, keep it, otherwise generate
+            const current = document.getElementById('m_policy').value;
+            let rand = current.split('-').pop();
+            if (!/^\d{6}$/.test(rand)) rand = Math.floor(100000 + Math.random() * 900000);
+
+            document.getElementById('m_policy').value = `KEN-${year}-${typeCode}-${rand}`;
+        }
+
+        document.getElementById('m_type').addEventListener('change', updatePolicyPreview);
+
+        function closeSuccessModal() {
+            document.getElementById('modalOverlay').classList.remove('open');
+            document.getElementById('successModal').classList.remove('open');
+        }
+
+        async function downloadMemberPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const name = document.getElementById('conf-name').textContent;
+            const policy = document.getElementById('conf-policy').textContent;
+            const type = document.getElementById('conf-type').textContent;
+            const phone = document.getElementById('conf-phone').textContent;
+
+            // Simple header
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(22);
+            doc.setTextColor(37, 211, 102); // KlaimSwift Green
+            doc.text("KlaimSwift Insurance", 20, 30);
+
+            doc.setFontSize(12);
+            doc.setTextColor(100, 100, 100);
+            doc.text("Member Registration Certificate", 20, 40);
+
+            doc.setDrawColor(200, 200, 200);
+            doc.line(20, 45, 190, 45);
+
+            // Details
+            doc.setFontSize(14);
+            doc.setTextColor(0, 0, 0);
+            doc.text(`Full Name: ${name}`, 20, 60);
+            doc.text(`Policy Number: ${policy}`, 20, 70);
+            doc.text(`Coverage Type: ${type}`, 20, 80);
+            doc.text(`WhatsApp Phone: ${phone}`, 20, 90);
+            doc.text(`Registered At: ${new Date().toLocaleDateString()}`, 20, 100);
+
+            doc.setFontSize(10);
+            doc.setTextColor(150, 150, 150);
+            doc.text("This is an electronically generated certificate.", 20, 130);
+
+            doc.save(`KlaimSwift_Member_${policy}.pdf`);
         }
 
         function setupRealtime() {
