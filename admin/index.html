@@ -465,33 +465,6 @@
             }
         }
 
-        async function seedMockData() {
-            const btn = document.getElementById('seedDataBtn');
-            const status = document.getElementById('seedStatus');
-            btn.disabled = true;
-            btn.textContent = 'Seeding...';
-            try {
-                const res = await fetch('/api/admin/seed-mock', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${sessionToken}` }
-                });
-                if (res.ok) {
-                    status.textContent = 'Seed successful! Refreshing...';
-                    status.style.color = '#25D366';
-                    await fetchData();
-                } else {
-                    status.textContent = 'Failed to seed data.';
-                    status.style.color = '#EF4444';
-                }
-            } catch (e) {
-                status.textContent = 'Network error.';
-                status.style.color = '#EF4444';
-            }
-            btn.disabled = false;
-            btn.textContent = '+ Seed Mock Users & Claims';
-            setTimeout(() => status.textContent = '', 4000);
-        }
-
         function setupRealtime() {
             supabaseClient.channel('public:claims').on('postgres_changes', { event: '*', schema: 'public', table: 'claims' }, fetchData).subscribe();
             supabaseClient.channel('public:mpesa_transactions').on('postgres_changes', { event: '*', schema: 'public', table: 'mpesa_transactions' }, fetchData).subscribe();
