@@ -126,7 +126,7 @@ async function handleVerify(phone, text, conv) {
 }
 
 function showMenu(phone) {
-    return wa.sendButtons(phone, 'What would you like to do?', [
+    return wa.sendInteractiveButtons(phone, 'What would you like to do?', [
         { id: 'file_claim', title: '📋 File a Claim' },
         { id: 'track_claim', title: '🔍 Track Claim' },
         { id: 'speak_agent', title: '💬 Speak to Agent' },
@@ -194,19 +194,18 @@ async function handleFileDocs(phone, message, conv) {
     if (text.toLowerCase() === 'done') {
         await supabase.from('conversations').update({ state: 'file-confirm' }).eq('phone', phone);
         const draft = conv.draft || {};
-        return wa.sendButtons(phone,
-            `📋 *Claim Summary*\n\n` +
+        const summaryText = `📋 *Claim Summary*\n\n` +
             `Type: ${draft.type}\n` +
             `Date: ${draft.incidentDate}\n` +
             `Amount: KES ${(draft.amountKES || 0).toLocaleString()}\n` +
             `Description: ${draft.description}\n` +
             `Documents: ${(draft.documents || []).length}\n\n` +
-            `Submit this claim?`,
-            [
-                { id: 'confirm_yes', title: '✅ Submit' },
-                { id: 'confirm_no', title: '❌ Cancel' },
-            ]
-        );
+            `Submit this claim?`;
+
+        return wa.sendInteractiveButtons(phone, summaryText, [
+            { id: 'file_confirm_yes', title: '✅ Yes, Submit' },
+            { id: 'file_confirm_no', title: '❌ No, Edit' },
+        ]);
     }
 
     // Save document reference
