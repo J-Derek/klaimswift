@@ -78,23 +78,26 @@ async function handleVerify(phone, text, conv) {
         return wa.sendText(phone, '❌ Invalid format. Please enter your policy number:\n\nFormat: KEN-YYYY-TYPE-NNNNNN\nExample: KEN-2025-MTR-123456');
     }
 
-    // Look up member
-    let { data: member } = await supabase
+    // Look up member — NO auto-registration
+    const { data: member, error } = await supabase
         .from('members')
         .select('*')
         .eq('policy_number', text.trim().toUpperCase())
         .single();
 
     if (!member) {
-        // Auto-register for demo
-        const { data: newMember } = await supabase.from('members').insert({
-            policy_number: text.trim().toUpperCase(),
-            phone: phone,
-            name: 'Member ' + text.trim().slice(-6),
-            insurance_type: text.includes('MTR') ? 'Motor Vehicle' : text.includes('MED') ? 'Medical' : text.includes('PRO') ? 'Property' : 'Life Insurance',
-            status: 'active',
-        }).select().single();
-        member = newMember;
+        return wa.sendText(phone,
+            `❌ *Policy not found.*\n\n` +
+            `The policy number *${text.trim().toUpperCase()}* is not registered in our system.\n\n` +
+            `To get started, please:\n` +
+            `• Contact your insurance admin to register you, OR\n` +
+            `• Visit our website for self-registration.\n\n` +
+            `If you believe this is an error, contact support.`
+        );
+    }
+
+    if (member.status !== 'active') {
+        return wa.sendText(phone, `⚠️ Your policy *${member.policy_number}* is currently *${member.status}*. Please contact your admin for assistance.`);
     }
 
     await supabase.from('conversations').update({
@@ -103,7 +106,14 @@ async function handleVerify(phone, text, conv) {
         member_name: member.name,
     }).eq('phone', phone);
 
-    await wa.sendText(phone, `✅ *Verified!* Welcome, ${member.name}.\n\nPolicy: ${member.policy_number}\nType: ${member.insurance_type}`);
+    // Confirm with full member details
+    await wa.sendText(phone,
+        `✅ *Identity Verified!*\n\n` +
+        `👤 *Name:* ${member.name}\n` +
+        `🪪 *Policy No:* ${member.policy_number}\n` +
+        `🏥 *Coverage:* ${member.insurance_type}\n` +
+        `📅 *Status:* ${member.status.toUpperCase()}\n`
+    );
     return showMenu(phone);
 }
 
