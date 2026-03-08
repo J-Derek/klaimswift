@@ -20,7 +20,7 @@ async function process(phone, message) {
             .from('conversations')
             .select('*')
             .eq('phone', phone)
-            .single();
+            .maybeSingle();
 
         if (fetchErr) {
             console.error(`[BotEngine] Error fetching conversation:`, fetchErr);
@@ -28,23 +28,31 @@ async function process(phone, message) {
 
         if (!conv) {
             console.log(`[BotEngine] No existing conversation found. Initializing new state...`);
-            const { error: insertErr } = await supabase.from('conversations').insert({ phone, state: 'verify', draft: {} });
+            const { data: newConv, error: insertErr } = await supabase
+                .from('conversations')
+                .insert({ phone, state: 'verify', draft: {} })
+                .select()
+                .single();
             if (insertErr) console.error(`[BotEngine] Error inserting new conversation:`, insertErr);
-            conv = { phone, state: 'verify', draft: {} };
+            conv = newConv || { phone, state: 'verify', draft: {} };
         }
 
-        console.log(`[BotEngine] Conversation state retrieved: ${conv.state}`);
-
+        console.log(`[BotEngine] Conversation state: ${conv.state}`);
 
         const text = extractText(message);
         const state = conv.state || 'verify';
 
         // Global commands
-        if (text.toLowerCase() === 'stop') {
+        const cmd = text.toLowerCase().trim();
+        if (cmd === 'stop') {
             await supabase.from('conversations').update({ state: 'stopped' }).eq('phone', phone);
             return wa.sendText(phone, 'You have unsubscribed. Send any message to re-subscribe.');
         }
-        if (text.toLowerCase() === 'menu' && state !== 'verify') {
+        if (cmd === 'restart' || cmd === 'reset') {
+            await supabase.from('conversations').delete().eq('phone', phone);
+            return wa.sendText(phone, 'Welcome back! Please enter your policy number (e.g., KEN-2025-MTR-123456):');
+        }
+        if (cmd === 'menu' && state !== 'verify') {
             await supabase.from('conversations').update({ state: 'menu', draft: {} }).eq('phone', phone);
             return showMenu(phone);
         }
