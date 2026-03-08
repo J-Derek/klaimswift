@@ -28,7 +28,12 @@ async function sendWithRetry(payload, retries = MAX_RETRIES) {
             console.log(`[WhatsAppService] Send successful on attempt ${attempt + 1}`);
             return res.data;
         } catch (err) {
-            console.error(`[WhatsAppService] Send error on attempt ${attempt + 1}:`, err.message);
+            if (err.response) {
+                console.error(`[WhatsAppService] Meta API Error Details:`, JSON.stringify(err.response.data, null, 2));
+            } else {
+                console.error(`[WhatsAppService] Send error on attempt ${attempt + 1}:`, err.message);
+            }
+
             if (attempt === retries) throw err;
             const delay = BASE_DELAY_MS * Math.pow(2, attempt);
             console.error(`WhatsApp send failed (attempt ${attempt + 1}), retrying in ${delay}ms...`);
@@ -147,7 +152,11 @@ async function markAsRead(messageId) {
             { headers: HEADERS }
         );
     } catch (err) {
-        console.error('Failed to mark message as read:', err.message);
+        if (err.response) {
+            console.error(`[WhatsAppService] markAsRead Error Details:`, JSON.stringify(err.response.data, null, 2));
+        } else {
+            console.error('Failed to mark message as read:', err.message);
+        }
     }
 }
 
