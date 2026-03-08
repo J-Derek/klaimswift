@@ -130,7 +130,7 @@
     const _supabaseUrl = 'https://lmyyzskrjwkmqnslipvi.supabase.co';
     const _supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxteXl6c2tyandrbXFuc2xpcHZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5NDk5NzUsImV4cCI6MjA4ODUyNTk3NX0.FWPVDH_drscdiC2hnTAqp3rnqCszoqwJrat4WD6lJ_A';
 
-    const supabase = supabase.createClient(_supabaseUrl, _supabaseAnonKey);
+    const supabaseClient = window.supabase.createClient(_supabaseUrl, _supabaseAnonKey);
 
     document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -142,7 +142,7 @@
       btn.textContent = 'Authenticating...';
       errorMsg.style.display = 'none';
 
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
 
       if (error) {
         errorMsg.textContent = error.message;
@@ -156,7 +156,7 @@
     });
 
     // Check if already logged in
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabaseClient.auth.getSession().then(({ data: { session } }) => {
       if (session) window.location.href = 'index.html';
     });
   </script>

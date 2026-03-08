@@ -367,12 +367,12 @@
         const _supabaseUrl = 'https://lmyyzskrjwkmqnslipvi.supabase.co';
         const _supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxteXl6c2tyandrbXFuc2xpcHZpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5NDk5NzUsImV4cCI6MjA4ODUyNTk3NX0.FWPVDH_drscdiC2hnTAqp3rnqCszoqwJrat4WD6lJ_A';
 
-        const supabase = supabase.createClient(_supabaseUrl, _supabaseAnonKey);
+        const supabaseClient = window.supabase.createClient(_supabaseUrl, _supabaseAnonKey);
         let sessionToken = null;
 
         // Check Auth
         async function checkAuth() {
-            const { data: { session } } = await supabase.auth.getSession();
+            const { data: { session } } = await supabaseClient.auth.getSession();
             if (!session) return window.location.href = 'login.html';
             sessionToken = session.access_token;
             document.getElementById('adminEmail').textContent = session.user.email;
@@ -381,7 +381,7 @@
         }
 
         async function logout() {
-            await supabase.auth.signOut();
+            await supabaseClient.auth.signOut();
             window.location.href = 'login.html';
         }
 
@@ -401,7 +401,7 @@
 
         async function fetchData() {
             // Fetch Claims
-            const { data: claims } = await supabase.from('claims').select('*').order('filed_at', { ascending: false });
+            const { data: claims } = await supabaseClient.from('claims').select('*').order('filed_at', { ascending: false });
             if (claims) {
                 document.getElementById('claimsTableBody').innerHTML = claims.map(c =>
                     `<tr>
@@ -418,7 +418,7 @@
             }
 
             // Fetch Payouts
-            const { data: payouts } = await supabase.from('mpesa_transactions').select('*').order('initiated_at', { ascending: false });
+            const { data: payouts } = await supabaseClient.from('mpesa_transactions').select('*').order('initiated_at', { ascending: false });
             if (payouts) {
                 document.getElementById('payoutsTableBody').innerHTML = payouts.map(t =>
                     `<tr>
@@ -433,8 +433,8 @@
         }
 
         function setupRealtime() {
-            supabase.channel('public:claims').on('postgres_changes', { event: '*', schema: 'public', table: 'claims' }, fetchData).subscribe();
-            supabase.channel('public:mpesa_transactions').on('postgres_changes', { event: '*', schema: 'public', table: 'mpesa_transactions' }, fetchData).subscribe();
+            supabaseClient.channel('public:claims').on('postgres_changes', { event: '*', schema: 'public', table: 'claims' }, fetchData).subscribe();
+            supabaseClient.channel('public:mpesa_transactions').on('postgres_changes', { event: '*', schema: 'public', table: 'mpesa_transactions' }, fetchData).subscribe();
         }
 
         async function approveClaim(claimId) {
