@@ -11,46 +11,62 @@ const { v4: uuidv4 } = require('uuid');
 // ─── State Machine ───────────────────────────────────────────────
 
 async function process(phone, message) {
-    // Get or create conversation state
-    let { data: conv } = await supabase
-        .from('conversations')
-        .select('*')
-        .eq('phone', phone)
-        .single();
+    console.log(`[BotEngine] Starting process for phone: ${phone}, type: ${message.type}`);
 
-    if (!conv) {
-        await supabase.from('conversations').insert({ phone, state: 'verify', draft: {} });
-        conv = { phone, state: 'verify', draft: {} };
-    }
+    try {
+        console.log(`[BotEngine] Looking up conversation state in Supabase...`);
+        // Get or create conversation state
+        let { data: conv, error: fetchErr } = await supabase
+            .from('conversations')
+            .select('*')
+            .eq('phone', phone)
+            .single();
 
-    const text = extractText(message);
-    const state = conv.state || 'verify';
+        if (fetchErr) {
+            console.error(`[BotEngine] Error fetching conversation:`, fetchErr);
+        }
 
-    // Global commands
-    if (text.toLowerCase() === 'stop') {
-        await supabase.from('conversations').update({ state: 'stopped' }).eq('phone', phone);
-        return wa.sendText(phone, 'You have unsubscribed. Send any message to re-subscribe.');
-    }
-    if (text.toLowerCase() === 'menu' && state !== 'verify') {
-        await supabase.from('conversations').update({ state: 'menu', draft: {} }).eq('phone', phone);
-        return showMenu(phone);
-    }
+        if (!conv) {
+            console.log(`[BotEngine] No existing conversation found. Initializing new state...`);
+            const { error: insertErr } = await supabase.from('conversations').insert({ phone, state: 'verify', draft: {} });
+            if (insertErr) console.error(`[BotEngine] Error inserting new conversation:`, insertErr);
+            conv = { phone, state: 'verify', draft: {} };
+        }
 
-    // State handlers
-    switch (state) {
-        case 'verify': return handleVerify(phone, text, conv);
-        case 'menu': return handleMenu(phone, text, conv);
-        case 'file-type': return handleFileType(phone, text, conv);
-        case 'file-date': return handleFileDate(phone, text, conv);
-        case 'file-amount': return handleFileAmount(phone, text, conv);
-        case 'file-desc': return handleFileDesc(phone, text, conv);
-        case 'file-docs': return handleFileDocs(phone, message, conv);
-        case 'file-confirm': return handleFileConfirm(phone, text, conv);
-        case 'tracking': return handleTracking(phone, text, conv);
-        case 'agent': return handleAgent(phone, text, conv);
-        default:
-            await supabase.from('conversations').update({ state: 'verify' }).eq('phone', phone);
-            return wa.sendText(phone, 'Welcome to KlaimSwift! Please enter your policy number (e.g., KEN-2025-MTR-123456):');
+        console.log(`[BotEngine] Conversation state retrieved: ${conv.state}`);
+
+
+        const text = extractText(message);
+        const state = conv.state || 'verify';
+
+        // Global commands
+        if (text.toLowerCase() === 'stop') {
+            await supabase.from('conversations').update({ state: 'stopped' }).eq('phone', phone);
+            return wa.sendText(phone, 'You have unsubscribed. Send any message to re-subscribe.');
+        }
+        if (text.toLowerCase() === 'menu' && state !== 'verify') {
+            await supabase.from('conversations').update({ state: 'menu', draft: {} }).eq('phone', phone);
+            return showMenu(phone);
+        }
+
+        // State handlers
+        switch (state) {
+            case 'verify': return handleVerify(phone, text, conv);
+            case 'menu': return handleMenu(phone, text, conv);
+            case 'file-type': return handleFileType(phone, text, conv);
+            case 'file-date': return handleFileDate(phone, text, conv);
+            case 'file-amount': return handleFileAmount(phone, text, conv);
+            case 'file-desc': return handleFileDesc(phone, text, conv);
+            case 'file-docs': return handleFileDocs(phone, message, conv);
+            case 'file-confirm': return handleFileConfirm(phone, text, conv);
+            case 'tracking': return handleTracking(phone, text, conv);
+            case 'agent': return handleAgent(phone, text, conv);
+            default:
+                await supabase.from('conversations').update({ state: 'verify' }).eq('phone', phone);
+                return wa.sendText(phone, 'Welcome to KlaimSwift! Please enter your policy number (e.g., KEN-2025-MTR-123456):');
+        }
+    } catch (err) {
+        console.error(`[BotEngine] CRITICAL FATAL ERROR processing message:`, err);
     }
 }
 
