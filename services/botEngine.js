@@ -61,10 +61,7 @@ async function process(phone, message) {
         switch (state) {
             case 'verify': return handleVerify(phone, text, conv);
             case 'menu': return handleMenu(phone, text, conv);
-            case 'file-type': return handleFileType(phone, text, conv);
             case 'file-date': return handleFileDate(phone, text, conv);
-            case 'file-amount': return handleFileAmount(phone, text, conv);
-            case 'file-desc': return handleFileDesc(phone, text, conv);
             case 'file-docs': return handleFileDocs(phone, message, conv);
             case 'file-confirm': return handleFileConfirm(phone, text, conv);
             case 'tracking': return handleTracking(phone, text, conv);
@@ -136,17 +133,13 @@ function showMenu(phone) {
 async function handleMenu(phone, text, conv) {
     const choice = text.toLowerCase();
     if (choice.includes('file') || choice === 'file_claim') {
-        await supabase.from('conversations').update({ state: 'file-type', draft: {} }).eq('phone', phone);
-        return wa.sendList(phone, 'Select your claim type:', 'Claim Types', [
-            { id: 'Motor Vehicle', title: '🚗 Motor Vehicle', description: 'Accident, theft, damage' },
-            { id: 'Medical', title: '🏥 Medical', description: 'Hospital, outpatient, dental' },
-            { id: 'Property', title: '🏠 Property', description: 'Fire, flood, theft' },
-            { id: 'Life Insurance', title: '💼 Life Insurance', description: 'Death, disability' },
-        ]);
+        // Default the type from the member's insurance_type if possible, or just proceed
+        await supabase.from('conversations').update({ state: 'file-date', draft: {} }).eq('phone', phone);
+        return wa.sendText(phone, '📅 When did the incident happen? (e.g., Today, Yesterday, or DD/MM/YYYY)');
     }
     if (choice.includes('track') || choice === 'track_claim') {
         await supabase.from('conversations').update({ state: 'tracking' }).eq('phone', phone);
-        return wa.sendText(phone, '🔍 Enter your Claim ID (e.g., CLM-2025-KE-0000001):');
+        return wa.sendText(phone, '🔍 Enter your Claim ID to check status (e.g., CLM-2025-KE-XXXXXXX):');
     }
     if (choice.includes('agent') || choice === 'speak_agent') {
         await supabase.from('conversations').update({ state: 'agent', needs_agent: true }).eq('phone', phone);
@@ -164,13 +157,9 @@ async function handleFileType(phone, text, conv) {
 }
 
 async function handleFileDate(phone, text, conv) {
-    const dateRegex = /^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/;
-    if (!dateRegex.test(text.trim())) {
-        return wa.sendText(phone, '❌ Invalid date. Please use DD/MM/YYYY format:');
-    }
-    const draft = { ...(conv.draft || {}), incidentDate: text.trim() };
-    await supabase.from('conversations').update({ state: 'file-amount', draft }).eq('phone', phone);
-    return wa.sendText(phone, '💰 What is the estimated claim amount in KES?\n\nExample: 50000');
+    const draft = { ...(conv.draft || {}), incidentDate: text };
+    await supabase.from('conversations').update({ state: 'file-docs', draft }).eq('phone', phone);
+    return wa.sendText(phone, '📎 Please upload your supporting documents (photos, receipts, reports).\n\nSend *done* when you have uploaded all documents.');
 }
 
 async function handleFileAmount(phone, text, conv) {
@@ -194,11 +183,13 @@ async function handleFileDocs(phone, message, conv) {
     if (text.toLowerCase() === 'done') {
         await supabase.from('conversations').update({ state: 'file-confirm' }).eq('phone', phone);
         const draft = conv.draft || {};
+
+        // Auto-detect type if not set
+        const type = draft.type || 'General';
+
         const summaryText = `📋 *Claim Summary*\n\n` +
-            `Type: ${draft.type}\n` +
+            `Type: ${type}\n` +
             `Date: ${draft.incidentDate}\n` +
-            `Amount: KES ${(draft.amountKES || 0).toLocaleString()}\n` +
-            `Description: ${draft.description}\n` +
             `Documents: ${(draft.documents || []).length}\n\n` +
             `Submit this claim?`;
 
@@ -218,10 +209,10 @@ async function handleFileDocs(phone, message, conv) {
         });
         const draft = { ...(conv.draft || {}), documents: docs };
         await supabase.from('conversations').update({ draft }).eq('phone', phone);
-        return wa.sendText(phone, `✅ Document received (${docs.length} total). Send more or type *done*.`);
+        return wa.sendText(phone, `✅ Received: ${docs.length} file(s). Send more or type *done*.`);
     }
 
-    return wa.sendText(phone, '📎 Please upload a photo or document, or type *done* to continue.');
+    return wa.sendText(phone, 'Please send an image or document, or type *done* to finish.');
 }
 
 async function handleFileConfirm(phone, text, conv) {
@@ -239,10 +230,10 @@ async function handleFileConfirm(phone, text, conv) {
     await supabase.from('claims').insert({
         claim_id: claimId,
         member_id: conv.member_id,
-        type: draft.type,
-        amount_kes: draft.amountKES,
+        type: draft.type || 'General', // Default to 'General' if not set
+        amount_kes: draft.amountKES || 0, // Default to 0 if not set
         incident_date: draft.incidentDate,
-        description: draft.description,
+        description: draft.description || 'No description provided.', // Default description
         status: 'pending',
         channel: 'WhatsApp',
         documents: draft.documents || [],
@@ -264,7 +255,7 @@ async function handleFileConfirm(phone, text, conv) {
         `✅ *Claim Submitted Successfully!*\n\n` +
         `📄 Claim ID: *${claimId}*\n` +
         `💰 Amount: KES ${(draft.amountKES || 0).toLocaleString()}\n` +
-        `📋 Type: ${draft.type}\n\n` +
+        `📋 Type: ${draft.type || 'General'}\n\n` +
         `⏳ Est. settlement: 2-3 business days\n` +
         `We'll update you at every step.`
     );
@@ -279,34 +270,35 @@ async function handleFileConfirm(phone, text, conv) {
 }
 
 async function handleTracking(phone, text, conv) {
-    const claimRegex = /^CLM-\d{4}-KE-\d{7}$/i;
-    if (!claimRegex.test(text.trim())) {
-        return wa.sendText(phone, '❌ Invalid Claim ID. Format: CLM-YYYY-KE-NNNNNNN');
-    }
+    const claimId = text.trim().toUpperCase();
 
-    const { data: claim } = await supabase
+    const { data: claim, error } = await supabase
         .from('claims')
         .select('*')
-        .eq('claim_id', text.trim().toUpperCase())
+        .eq('claim_id', claimId)
         .single();
 
-    if (!claim) {
-        return wa.sendText(phone, '❌ Claim not found. Please check the ID and try again.');
+    if (error || !claim) {
+        return wa.sendText(phone, `❌ *Claim not found.*\n\nWe couldn't find a claim with ID: *${claimId}*.\nPlease double-check the ID or type *menu* to go back.`);
     }
 
-    const timeline = (claim.timeline || []).slice(-3).map(t =>
-        `• ${t.event} — ${t.timestamp?.slice(0, 16)?.replace('T', ' ')}`
-    ).join('\n');
+    const statusIcons = {
+        'pending': '⏳',
+        'approved': '✅',
+        'rejected': '❌',
+        'payout_initiated': '💸',
+        'paid': '💰',
+        'suspended': '⚠️'
+    };
 
-    await supabase.from('conversations').update({ state: 'menu' }).eq('phone', phone);
+    const icon = statusIcons[claim.status] || '❓';
+    const statusMsg = `🔍 *Claim Status Update*\n\n` +
+        `📄 ID: *${claim.claim_id}*\n` +
+        `📅 Date Filed: ${new Date(claim.filed_at).toLocaleDateString()}\n` +
+        `💼 status: ${icon} *${claim.status.toUpperCase()}*\n\n` +
+        `Note: We will notify you of any changes here. Type *menu* to return.`;
 
-    return wa.sendText(phone,
-        `📋 *Claim ${claim.claim_id}*\n\n` +
-        `Status: ${claim.status}\n` +
-        `Amount: KES ${(claim.amount_kes || 0).toLocaleString()}\n` +
-        `AI Score: ${claim.ai_score ?? 'Pending'}\n\n` +
-        `📜 *Recent Activity:*\n${timeline || 'No activity yet'}`
-    );
+    return wa.sendText(phone, statusMsg);
 }
 
 async function handleAgent(phone, text, conv) {
