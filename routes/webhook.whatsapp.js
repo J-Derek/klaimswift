@@ -31,10 +31,7 @@ router.get('/', (req, res) => {
  * POST /webhook/whatsapp — Receive inbound messages
  * Verifies X-Hub-Signature-256, parses message, delegates to botEngine
  */
-router.post('/', (req, res) => {
-    // Respond 200 immediately (Meta requires fast response)
-    res.sendStatus(200);
-
+router.post('/', async (req, res) => {
     // Verify signature
     const signature = req.headers['x-hub-signature-256'];
     if (signature && process.env.WHATSAPP_APP_SECRET) {
@@ -45,7 +42,7 @@ router.post('/', (req, res) => {
                 .digest('hex');
         if (signature !== expectedSig) {
             console.warn('[WhatsApp] Invalid webhook signature');
-            return;
+            return res.sendStatus(403);
         }
     }
 
@@ -55,24 +52,28 @@ router.post('/', (req, res) => {
         const changes = entry?.changes?.[0];
         const value = changes?.value;
 
-        if (!value?.messages) return; // Status update or other non-message event
+        if (!value?.messages) return res.sendStatus(200); // Status update or other non-message event
+
+        const promises = [];
 
         for (const message of value.messages) {
             const phone = message.from; // +254XXXXXXXXX
-            const contact = value.contacts?.[0];
-
             console.log(`[WhatsApp] Message from ${phone}: type=${message.type}`);
 
-            // Mark as read
-            markAsRead(message.id).catch(() => { });
-
-            // Process async — don't block webhook response
-            botEngine.process(phone, message).catch((err) =>
-                console.error(`[WhatsApp] Bot processing error for ${phone}:`, err)
+            // Queue processing to await before lambda freeze
+            promises.push(markAsRead(message.id).catch(e => console.error('markAsRead err:', e.message)));
+            promises.push(
+                botEngine.process(phone, message).catch((err) =>
+                    console.error(`[WhatsApp] Bot processing error for ${phone}:`, err)
+                )
             );
         }
+
+        await Promise.all(promises);
+        return res.sendStatus(200);
     } catch (err) {
         console.error('[WhatsApp] Webhook parse error:', err);
+        return res.sendStatus(500);
     }
 });
 
